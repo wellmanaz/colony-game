@@ -1029,6 +1029,15 @@ function updateReport(s, inputs, dt) {
 function startAuction(s, gi) {
   s.phase = 'auction';
   const good = GOODS[gi];
+  // Nothing to trade? Nobody holds any and the Exchange has none to sell: skip it.
+  const held = s.players.reduce((n, p) => n + p.goods[good], 0);
+  const storeHas = good !== 'diamonds' && s.store.stock[good] > 0;
+  if (held === 0 && !storeHas) {
+    toast(s, `No ${OUTFITS[gi].name.toLowerCase()} in the colony — no auction this round`, 2.5);
+    if (gi + 1 < GOODS.length) startAuction(s, gi + 1);
+    else startSummary(s);
+    return;
+  }
   const allAI = quick(s);
   const dry = good === 'diamonds' || s.store.stock[good] <= 0;
   const axisMax = Math.min(400, dry ? Math.max(300, Math.ceil((s.store.sell[good] * 3) / 50) * 50) : Math.max(150, Math.ceil((s.store.sell[good] * 2) / 50) * 50));
