@@ -23,6 +23,10 @@ By default the game streams the M.U.L.E. main theme from the site that hosts it 
 
 After 12 rounds the richest ape wins, and the colony as a whole needs $60,000 to count as a success.
 
+## Your own images
+
+A tendies plot shows a fast-food sign instead of a robot. The signs are parodies drawn in code; to use pictures of your own, put PNG files in `assets/food/` named `1.png`, `2.png`, … (up to 8) and they are used instead. No such images are included in this repository.
+
 ## Contents
 
 - `index.html`, `js/main.js` — browser side: input, lobby, drawing
