@@ -220,6 +220,87 @@ function drawBackground() {
   });
 }
 
+// Goods icons: a chicken nugget, an energy-drink can, a microchip, and
+// the diamond hands. `size` is roughly the icon's height.
+function drawGoodIcon(id, x, y, size) {
+  const k = size / 40;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(k, k);
+  if (id === 'tendies') {
+    ctx.fillStyle = '#e0a23a';
+    ctx.beginPath();
+    ctx.moveTo(-20, -4);
+    ctx.bezierCurveTo(-22, -18, -6, -22, 2, -16);
+    ctx.bezierCurveTo(10, -22, 24, -14, 20, -2);
+    ctx.bezierCurveTo(26, 8, 14, 20, 2, 16);
+    ctx.bezierCurveTo(-8, 22, -24, 12, -20, -4);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#f2c65c';
+    ctx.beginPath();
+    ctx.ellipse(-4, -4, 10, 7, -0.4, 0, 7);
+    ctx.fill();
+    ctx.fillStyle = '#b97a1e';
+    [[-12, 4], [6, 8], [10, -8], [-2, 10]].forEach(([px, py]) => {
+      ctx.beginPath();
+      ctx.arc(px, py, 1.8, 0, 7);
+      ctx.fill();
+    });
+  } else if (id === 'fuel') {
+    // slim can: silver with a blue band and a red emblem on a yellow sun
+    ctx.fillStyle = '#c9d1dc';
+    rr(-9, -22, 18, 44, 4);
+    ctx.fill();
+    ctx.fillStyle = '#1f4fd0';
+    ctx.beginPath();
+    ctx.moveTo(-9, -8);
+    ctx.lineTo(9, -16);
+    ctx.lineTo(9, 22);
+    ctx.lineTo(-9, 22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#f5c400';
+    ctx.beginPath();
+    ctx.arc(0, 2, 7, 0, 7);
+    ctx.fill();
+    ctx.fillStyle = '#d81e1e';
+    ctx.beginPath();
+    ctx.moveTo(-6, 4);
+    ctx.lineTo(-1, -2);
+    ctx.lineTo(1, -2);
+    ctx.lineTo(6, 4);
+    ctx.lineTo(2, 3);
+    ctx.lineTo(-2, 3);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#8f99a8';
+    rr(-9, -24, 18, 4, 2);
+    ctx.fill();
+  } else if (id === 'chips') {
+    ctx.fillStyle = '#2c3340';
+    rr(-14, -14, 28, 28, 4);
+    ctx.fill();
+    ctx.fillStyle = '#b6e35a';
+    rr(-7, -7, 14, 14, 2);
+    ctx.fill();
+    ctx.fillStyle = '#d9b84a';
+    for (let i = -9; i <= 9; i += 6) {
+      ctx.fillRect(i - 1.5, -20, 3, 6);
+      ctx.fillRect(i - 1.5, 14, 3, 6);
+      ctx.fillRect(-20, i - 1.5, 6, 3);
+      ctx.fillRect(14, i - 1.5, 6, 3);
+    }
+  } else if (id === 'diamonds') {
+    ctx.font = '34px system-ui, "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#fff';
+    ctx.fillText('💎🙌', 0, 2);
+  }
+  ctx.restore();
+}
+
 // A four-legged robot dog. The tool it carries rides on its back. Legs trot
 // when it is moving; `facing` is 1 for right, -1 for left.
 function drawBot(x, y, outfit, scale = 1, opts = {}) {
@@ -743,7 +824,8 @@ function drawTown(now) {
     } else if (o) {
       l1 = `${o.tool}: ${money(o.cost)}`;
       l2 = `makes ${o.name}`;
-      drawBot(b.x + b.w / 2, b.y + 150, b.outfit, 1.1, { now });
+      drawGoodIcon(o.id, b.x + 70, b.y + 140, o.id === 'diamonds' ? 52 : 56);
+      drawBot(b.x + b.w / 2 + 50, b.y + 150, b.outfit, 1.0, { now });
     } else if (b.id === 'assay') {
       l1 = 'Check a plot for diamonds';
       l2 = 'fetch a sample, bring it back';
@@ -790,12 +872,8 @@ function drawPanels() {
     text(`${C.countPlots(game, i)} plots · ${C.countBots(game, i)} bots`, x + 36, y + 52, 18, '#9aa7bd', 'left', 500);
     let gx = x + 36;
     C.OUTFITS.forEach((o) => {
-      ctx.fillStyle = o.color;
-      ctx.beginPath();
-      ctx.arc(gx + 10, y + 82, 10, 0, 7);
-      ctx.fill();
-      text(o.letter, gx + 10, y + 83, 13, '#141821', 'center', 800);
-      text(String(p.goods[o.id]), gx + 28, y + 82, 22, '#dfe6f1', 'left', 600);
+      drawGoodIcon(o.id, gx + 12, y + 82, o.id === 'diamonds' ? 22 : 24);
+      text(String(p.goods[o.id]), gx + (o.id === 'diamonds' ? 44 : 34), y + 82, 22, '#dfe6f1', 'left', 600);
       gx += 94;
     });
   });
@@ -844,7 +922,8 @@ function drawAuction() {
   const o = C.OUTFITS[a.gi];
   const st = game.store;
   drawTopBar(`Trading floor ${a.gi + 1} of 4`);
-  text(`${o.name.toUpperCase()} AUCTION`, W / 2, 150, 64, o.color, 'center', 800);
+  text(`${o.name.toUpperCase()} AUCTION`, W / 2 + 40, 150, 64, o.color, 'center', 800);
+  drawGoodIcon(o.id, W / 2 - 40 - ctx.measureText(`${o.name.toUpperCase()} AUCTION`).width / 2, 150, 64);
 
   const sells = a.good !== 'diamonds' && st.stock[a.good] > 0;
   const stockText = a.good === 'diamonds' ? 'has buyers offworld' : `has ${st.stock[a.good]} in stock`;
