@@ -15,7 +15,7 @@ export const EXCHANGE_Y = MAP_Y + 3 * TILE_H;
 
 export const CLAIM_DWELL = 0.3; // seconds the scanner rests on each plot
 export const COIN_TIME = 2.6; // how long a Bitcoin stays visible
-export const COIN_RADIUS = 40; // how close you must be to grab it
+export const COIN_RADIUS = 48; // how close you must be to grab it
 export const CHART_TIME = 2.2; // fall + rise of the production chart
 export const FULL_TURN = 32; // seconds of a turn with a full belly
 export const WALK_SPEED = 460; // pixels per second
@@ -777,6 +777,19 @@ function updateWalk(s, inputs, dt) {
     tu.x = Math.max(MAP_X + 24, Math.min(MAP_X + MAP_W - 24, tu.x));
     tu.y = Math.max(MAP_Y + 24, Math.min(MAP_Y + MAP_H - 24, tu.y));
     const here = tileAt(s, tu.x, tu.y);
+    // Walk over a Bitcoin to grab it: body or feet, bot in tow or not.
+    if (s.coin && !tu.coinCaught) {
+      const dBody = Math.hypot(s.coin.x - tu.x, s.coin.y - tu.y);
+      const dFeet = Math.hypot(s.coin.x - tu.x, s.coin.y - (tu.y + 34));
+      if (Math.min(dBody, dFeet) <= COIN_RADIUS) {
+        const win = coinReward(s.round);
+        player.money += win;
+        player.whales++;
+        tu.coinCaught = true;
+        s.coin = null;
+        toast(s, `${player.name} grabbed a Bitcoin and cashed it for $${win}!`, 3);
+      }
+    }
     if (here && here.exchange) {
       tu.scene = 'town';
       tu.x = tu.x < EXCHANGE_X ? TOWN.exitLeft + 30 : TOWN.exitRight - 30;
@@ -799,13 +812,6 @@ function updateWalk(s, inputs, dt) {
           tu.outfit = -1;
           s.flash = { tile: tileIndex(botTile.c, botTile.r), t: 0.5 };
         }
-      } else if (s.coin && Math.hypot(s.coin.x - tu.x, s.coin.y - tu.y) <= COIN_RADIUS) {
-        const win = coinReward(s.round);
-        player.money += win;
-        player.whales++;
-        tu.coinCaught = true;
-        s.coin = null;
-        toast(s, `${player.name} grabbed a Bitcoin and cashed it for $${win}!`, 3);
       } else if (tu.assay === 'need-sample') {
         tu.assay = 'have-sample';
         tu.sampleTile = tileIndex(here.c, here.r);

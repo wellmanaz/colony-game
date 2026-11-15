@@ -262,7 +262,7 @@ function walkTurn(s, seat, mem, inp, dt) {
     mem.coinDelay -= dt;
     const d = Math.hypot(s.coin.x - tu.x, s.coin.y - tu.y);
     if (mem.coinWant && mem.coinDelay <= 0 && d < s.coin.t * C.WALK_SPEED * 0.8) {
-      if (steerMap(inp, tu, s.coin.x, s.coin.y) < 28) press();
+      steerMap(inp, tu, s.coin.x, s.coin.y);
       return;
     }
   }

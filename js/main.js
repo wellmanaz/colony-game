@@ -2134,7 +2134,7 @@ function drawGame(now) {
     else if (tu.assay === 'need-sample') hint = 'Stand on a plot and press A to take a sample';
     else if (tu.assay === 'have-sample') hint = 'Take the sample back to the Assay Office';
     else if (tu.listing) hint = 'A on a plot you own lists it for sale (A again withdraws) · B ends turn';
-    else hint = 'Walk into The Exchange for a bot · stand on a Bitcoin and press A to grab it · B ends turn';
+    else hint = 'Walk into The Exchange for a bot · walk over a Bitcoin to grab it · B ends turn';
     drawTopBar(`${p.name}: ${hint}`);
     drawTimer(tu);
     if (tu.scene === 'town') drawTown(now);
