@@ -1654,7 +1654,7 @@ function drawAuction() {
       text((role === 'buy' ? 'BUYING' : 'SELLING') + (a.locked[i] ? ' ✓' : ''), x, y + 90, 26, role === 'buy' ? '#6be3a2' : '#ff8ad8', 'center', 800);
       text(`has ${p.goods[a.good]} · ${money(p.money)}`, x, y + 118, 20, '#9aa7bd', 'center', 500);
     });
-    text('Stick UP to be a buyer · stick DOWN to be a seller · A when you are set', W / 2, 900, 28, '#9aa7bd', 'center', 500);
+    text('Stick UP to sell (top) · stick DOWN to buy (bottom) · A when you are set', W / 2, 900, 28, '#9aa7bd', 'center', 500);
     return;
   }
 

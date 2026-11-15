@@ -317,8 +317,8 @@ function auctionTurn(s, seat, mem, inp, dt) {
   }
   const m = mem.auc;
   if (a.stage === 'declare') {
-    if (m.want > 0) inp.y = -1;
-    else if (m.want < 0) inp.y = 1;
+    if (m.want > 0) inp.y = 1; // down: buyer
+    else if (m.want < 0) inp.y = -1; // up: seller
     return;
   }
   if (a.stage !== 'trade' || !a.active[seat]) return;

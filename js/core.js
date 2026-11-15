@@ -1073,8 +1073,9 @@ function updateAuction(s, inputs, dt) {
   if (a.stage === 'declare') {
     s.players.forEach((p, i) => {
       const inp = inputs[i];
-      if (inp.y < -0.5) a.roles[i] = 'buy';
-      else if (inp.y > 0.5 && p.goods[good] > criticalLevel(s, i, good)) a.roles[i] = 'sell';
+      // Sellers stand at the top, buyers at the bottom: up = sell, down = buy.
+      if (inp.y > 0.5) a.roles[i] = 'buy';
+      else if (inp.y < -0.5 && p.goods[good] > criticalLevel(s, i, good)) a.roles[i] = 'sell';
       if (inp.a) a.locked[i] = true;
     });
     a.t -= dt;
