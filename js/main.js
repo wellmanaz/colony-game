@@ -12,7 +12,7 @@ const PARAMS = new URLSearchParams(location.search);
 const DEMO = PARAMS.has('demo'); // AI-only game that starts by itself
 const SKIP = Number(PARAMS.get('skip')) || 0; // demo only: seconds to fast-forward at start
 const UNTIL = PARAMS.get('until') || ''; // demo only: fast-forward until a phase (e.g. auction:trade), then SKIP more seconds
-const opts = { rounds: Number(PARAMS.get('rounds')) === 6 ? 6 : 12, protect: PARAMS.has('protect') };
+const opts = { rounds: Number(PARAMS.get('rounds')) === 6 ? 6 : 12, protect: PARAMS.has('protect'), humanPace: PARAMS.get('pace') === 'human' };
 
 const music = new Music();
 // Background track: the M.U.L.E. main theme (Roy Glover), streamed from the
@@ -180,41 +180,92 @@ function drawBackground() {
   });
 }
 
-function drawBot(x, y, outfit, scale = 1) {
+// A four-legged robot dog. The tool it carries rides on its back. Legs trot
+// when it is moving; `facing` is 1 for right, -1 for left.
+function drawBot(x, y, outfit, scale = 1, opts = {}) {
   const o = outfit >= 0 ? C.OUTFITS[outfit] : null;
+  const now = opts.now || 0;
+  const moving = !!opts.moving;
+  const facing = opts.facing || 1;
   ctx.save();
   ctx.translate(x, y);
-  ctx.scale(scale, scale);
-  ctx.strokeStyle = '#8f99a8';
-  ctx.lineWidth = 4;
+  ctx.scale(scale * facing, scale);
+
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
   ctx.beginPath();
-  ctx.moveTo(0, -26);
-  ctx.lineTo(0, -38);
-  ctx.stroke();
-  ctx.fillStyle = o ? o.color : '#8f99a8';
-  ctx.beginPath();
-  ctx.arc(0, -40, 5, 0, 7);
+  ctx.ellipse(0, 22, 32, 6, 0, 0, 7);
   ctx.fill();
-  ctx.fillStyle = '#cfd6e0';
-  rr(-24, -26, 48, 46, 9);
+
+  // legs: hip positions along the body; a trot pairs diagonal legs
+  const hips = [
+    [-20, 1, 0],
+    [-14, -1, Math.PI],
+    [14, -1, Math.PI],
+    [20, 1, 0],
+  ];
+  const t = now / 80;
+  hips.forEach(([hx, side, phase], i) => {
+    const swing = moving ? Math.sin(t + phase) * 0.55 : 0;
+    const lift = moving ? Math.max(0, Math.sin(t + phase)) * 3 : 0;
+    const kx = hx + Math.sin(swing) * 10;
+    const ky = 8 + Math.cos(swing) * 10 - lift;
+    const fx = kx + Math.sin(swing * 0.6) * 8;
+    const fy = ky + 10 - lift * 0.4;
+    ctx.strokeStyle = side > 0 ? '#aeb7c6' : '#7d8797';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(hx, 2);
+    ctx.lineTo(kx, ky);
+    ctx.lineTo(fx, fy);
+    ctx.stroke();
+    ctx.fillStyle = '#2c3340';
+    ctx.beginPath();
+    ctx.arc(fx, fy + 1, 3.2, 0, 7);
+    ctx.fill();
+    void i;
+  });
+
+  // body
+  const bob = moving ? Math.sin(t * 2) * 1.2 : 0;
+  ctx.translate(0, bob);
+  ctx.fillStyle = '#dfe5ee';
+  rr(-30, -12, 60, 22, 9);
+  ctx.fill();
+  ctx.fillStyle = '#b8c1cf';
+  rr(-30, -2, 60, 12, 8);
+  ctx.fill();
+  // head, out front
+  ctx.fillStyle = '#e8edf4';
+  rr(22, -18, 22, 16, 6);
   ctx.fill();
   ctx.fillStyle = '#1a2030';
-  rr(-17, -20, 34, 13, 5);
+  rr(30, -15, 12, 7, 3);
   ctx.fill();
   ctx.fillStyle = '#7ef0ff';
-  ctx.fillRect(-11, -16, 6, 5);
-  ctx.fillRect(5, -16, 6, 5);
+  ctx.fillRect(33, -14, 7, 4);
+  // tail stub
+  ctx.strokeStyle = '#b8c1cf';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(-30, -8);
+  ctx.lineTo(-38, -16);
+  ctx.stroke();
+  // tool mount on the back
   if (o) {
     ctx.fillStyle = o.color;
-    ctx.beginPath();
-    ctx.arc(0, 6, 11, 0, 7);
+    rr(-12, -26, 24, 16, 5);
     ctx.fill();
-    text(o.letter, 0, 7, 16, '#141821', 'center', 800);
+    ctx.save();
+    ctx.scale(facing, 1);
+    text(o.letter, 0, -17, 14, '#141821', 'center', 800);
+    ctx.restore();
   } else {
     ctx.strokeStyle = '#8f99a8';
     ctx.setLineDash([3, 3]);
-    ctx.beginPath();
-    ctx.arc(0, 6, 11, 0, 7);
+    ctx.lineWidth = 2;
+    rr(-12, -26, 24, 16, 5);
     ctx.stroke();
     ctx.setLineDash([]);
   }
@@ -279,31 +330,26 @@ function drawWalker(x, y, color, isAI, facing) {
   ctx.restore();
 }
 
-function drawWhale(x, y, now) {
-  const bob = Math.sin(now / 160) * 5;
+function drawCoin(x, y, now) {
+  // A small spinning gold coin.
+  const spin = Math.abs(Math.cos(now / 110));
   ctx.save();
-  ctx.translate(x, y + bob);
-  ctx.fillStyle = '#5aa9ff';
+  ctx.translate(x, y);
+  ctx.scale(Math.max(0.15, spin), 1);
+  ctx.fillStyle = '#f7931a';
   ctx.beginPath();
-  ctx.ellipse(0, 0, 44, 22, 0, 0, 7);
+  ctx.arc(0, 0, 18, 0, 7);
   ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(38, -4);
-  ctx.lineTo(62, -22);
-  ctx.lineTo(58, 2);
-  ctx.lineTo(62, 22);
-  ctx.lineTo(38, 6);
-  ctx.fill();
-  ctx.fillStyle = '#dff1ff';
-  ctx.beginPath();
-  ctx.ellipse(-4, 8, 30, 10, 0, 0, 7);
-  ctx.fill();
-  ctx.fillStyle = '#141821';
-  ctx.beginPath();
-  ctx.arc(-24, -6, 3, 0, 7);
-  ctx.fill();
-  text('$', -2, -36, 26, '#ffd84d', 'center', 800);
+  ctx.strokeStyle = '#ffd27a';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  text('₿', 0, 1, 22, '#fff8e6', 'center', 800);
   ctx.restore();
+  // glint
+  ctx.fillStyle = `rgba(255,255,255,${0.4 + 0.6 * spin})`;
+  ctx.beginPath();
+  ctx.arc(x - 8, y - 10, 3, 0, 7);
+  ctx.fill();
 }
 
 function drawGem(x, y, size, color) {
@@ -409,8 +455,7 @@ function drawTile(t, now) {
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
   }
-  if (t.bot >= 0) drawBot(x + w / 2, y + h / 2 + 12, t.bot, 1.05);
-  if (game.whale && game.whale.tile === C.tileIndex(t.c, t.r) && Math.floor(now / 180) % 3 !== 0) drawWhale(x + w / 2, y + h / 2, now);
+  if (t.bot >= 0) drawBot(x + w / 2, y + h / 2 + 12, t.bot, 1.05, { now });
 }
 
 function drawExchange() {
@@ -450,6 +495,7 @@ function drawExchange() {
 function drawMap(now) {
   game.tiles.forEach((t) => drawTile(t, now));
   drawExchange();
+  if (game.coin) drawCoin(game.coin.x, game.coin.y, now);
   if (game.flash) {
     const t = game.tiles[game.flash.tile];
     ctx.fillStyle = `rgba(255,255,255,${Math.max(0, game.flash.t)})`;
@@ -508,11 +554,11 @@ function drawTown(now) {
     if (b.id === 'lot') {
       l1 = price === null ? 'SOLD OUT' : `Bot: ${money(price)}`;
       l2 = `${game.store.bots} in stock · return a bot here for a refund`;
-      drawBot(b.x + b.w / 2, b.y + 150, -1, 1.1);
+      drawBot(b.x + b.w / 2, b.y + 150, -1, 1.1, { now });
     } else if (o) {
       l1 = `${o.tool}: ${money(o.cost)}`;
       l2 = `makes ${o.name}`;
-      drawBot(b.x + b.w / 2, b.y + 150, b.outfit, 1.1);
+      drawBot(b.x + b.w / 2, b.y + 150, b.outfit, 1.1, { now });
     } else if (b.id === 'assay') {
       l1 = 'Check a plot for diamonds';
       l2 = 'fetch a sample, bring it back';
@@ -531,7 +577,7 @@ function drawTown(now) {
     text(l2, b.x + b.w / 2, b.y + b.h - 22, 17, '#9aa7bd', 'center', 500);
   });
 
-  if (tu.hasBot) drawBot(tu.bx, tu.by, tu.outfit, 0.9);
+  if (tu.hasBot) drawBot(tu.bx, tu.by, tu.outfit, 0.9, { now, moving: tu.moving, facing: tu.facing });
   drawWalker(tu.x, tu.y, PCOL[tu.seat], p.kind === 'ai', tu.facing);
   if (tu.assay === 'have-sample') text('🧪', tu.x + 34, tu.y - 40, 30, '#fff', 'center');
 }
@@ -577,13 +623,23 @@ function drawTopBar(hint, hintColor = '#c8d2e3') {
 }
 
 function drawTimer(tu) {
+  // The bar is scaled to a full-length turn, so a hungry player's shorter
+  // turn shows as a shorter bar from the start.
+  const full = 1760 * (tu.length / C.FULL_TURN);
   const frac = Math.max(0, tu.t / tu.length);
   ctx.fillStyle = '#1d2638';
   rr(80, 78, 1760, 14, 7);
   ctx.fill();
+  if (tu.length < C.FULL_TURN) {
+    ctx.fillStyle = 'rgba(255,107,107,0.25)';
+    rr(80 + full, 78, 1760 - full, 14, 7);
+    ctx.fill();
+  }
   ctx.fillStyle = frac < 0.2 ? '#ff6b6b' : PCOL[tu.seat];
-  rr(80, 78, 1760 * frac, 14, 7);
+  rr(80, 78, full * frac, 14, 7);
   ctx.fill();
+  const p = game.players[tu.seat];
+  if (p.foodShort > 0) text(`HUNGRY — ${p.foodShort} tendie${p.foodShort > 1 ? 's' : ''} short last round, ${tu.length}s turn`, 80 + full + 12, 85, 16, '#ff6b6b', 'left', 800);
 }
 
 function drawToasts() {
@@ -615,6 +671,10 @@ function drawAuction() {
   const yOf = (price) => bottom - (price / a.axisMax) * (bottom - top);
   const colX = (i) => 480 + i * 320;
 
+  if (a.stage === 'chart') {
+    drawGoodChart(a.gi, a.age, top, bottom);
+    return;
+  }
   if (a.stage === 'declare') {
     text(`Buying or selling? ${Math.ceil(a.t)}`, W / 2, 262, 40, '#fff', 'center', 800);
     game.players.forEach((p, i) => {
@@ -702,110 +762,99 @@ function drawAuction() {
 
 // ---------- report, summary, result ----------
 
-let reportRef = null;
-let reportSfx = new Set();
-const REPORT_STEP = 2.6; // seconds per good: fall, then rise
+function drawReport() {
+  const r = game.report;
+  drawTopBar('Production');
+  text('PRODUCTION', W / 2, 150, 56, '#3ddc84', 'center', 800);
+  let y = 300;
+  if (r.event) {
+    ctx.fillStyle = 'rgba(255,107,107,0.15)';
+    rr(160, y - 44, 1600, 88, 16);
+    ctx.fill();
+    text(r.event.text, W / 2, y, 34, '#ff6b6b', 'center', 800);
+    y += 110;
+  }
+  r.notes.forEach((n) => {
+    text(n, W / 2, y, 26, '#ffd84d', 'center', 600);
+    y += 42;
+  });
+  text(`A to continue (${Math.ceil(r.t)})`, W / 2, 920, 22, '#9aa7bd', 'center', 500);
+}
+
+// One good's chart: each player's bar falls for what was used and spoiled,
+// then rises by what was produced. Shown right before that good's auction.
+let chartKey = '';
+let chartSfx = new Set();
 const FALL = 1.1;
 const RISE = 1.1;
 
-function drawReport() {
-  const r = game.report;
-  if (reportRef !== r) {
-    reportRef = r;
-    reportSfx = new Set();
+function drawGoodChart(gi, age, top, bottom) {
+  const o = C.OUTFITS[gi];
+  const g = o.id;
+  const rows = game.report ? game.report.rows : [];
+  const key = `${game.round}:${gi}`;
+  if (chartKey !== key) {
+    chartKey = key;
+    chartSfx = new Set();
   }
-  drawTopBar('Production');
-  text('PRODUCTION REPORT', W / 2, 140, 56, '#3ddc84', 'center', 800);
-  let y = 200;
-  if (r.event) {
-    ctx.fillStyle = 'rgba(255,107,107,0.15)';
-    rr(160, y - 28, 1600, 56, 14);
-    ctx.fill();
-    text(r.event.text, W / 2, y, 28, '#ff6b6b', 'center', 800);
-    y += 56;
+  if (age < FALL && !chartSfx.has('d')) {
+    chartSfx.add('d');
+    if (rows.some((row) => row.ledger[g].used + row.ledger[g].spoiled > 0)) music.slide(false, FALL);
   }
-  r.notes.slice(0, 3).forEach((n) => {
-    text(n, W / 2, y, 21, '#ffd84d', 'center', 600);
-    y += 30;
+  if (age >= FALL && age < FALL + RISE && !chartSfx.has('u')) {
+    chartSfx.add('u');
+    if (rows.some((row) => row.ledger[g].produced > 0)) music.slide(true, RISE);
+  }
+  const baseY = bottom - 40;
+  const maxH = bottom - top - 140;
+  let scale = 8;
+  rows.forEach((row) => {
+    const L = row.ledger[g];
+    scale = Math.max(scale, L.before, L.after);
   });
-
-  const baseY = 820;
-  const maxH = 380;
-  const groupX = [360, 760, 1160, 1560];
-  const gi = Math.floor(r.age / REPORT_STEP);
-  const within = r.age - gi * REPORT_STEP;
-
-  C.OUTFITS.forEach((o, k) => {
-    const g = o.id;
-    const gx = groupX[k];
-    let scale = 8;
-    r.rows.forEach((row) => {
-      const L = row.ledger[g];
-      scale = Math.max(scale, L.before, L.after);
-    });
-    const active = k === gi;
-    if (active && within < FALL && !reportSfx.has(`${k}d`)) {
-      reportSfx.add(`${k}d`);
-      if (r.rows.some((row) => row.ledger[g].used + row.ledger[g].spoiled > 0)) music.slide(false, FALL);
-    }
-    if (active && within >= FALL && within < FALL + RISE && !reportSfx.has(`${k}u`)) {
-      reportSfx.add(`${k}u`);
-      if (r.rows.some((row) => row.ledger[g].produced > 0)) music.slide(true, RISE);
-    }
-    // group frame
-    ctx.fillStyle = active ? '#1a2234' : '#121724';
-    rr(gx - 180, baseY - maxH - 60, 360, maxH + 110, 14);
+  ctx.fillStyle = '#10151f';
+  rr(300, top - 20, 1320, bottom - top + 40, 16);
+  ctx.fill();
+  ctx.strokeStyle = '#2a3447';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(340, baseY);
+  ctx.lineTo(1580, baseY);
+  ctx.stroke();
+  const stage = age < FALL ? 0 : age < FALL + RISE ? 1 : 2;
+  const what = g === 'tendies' ? 'eaten and spoiled' : g === 'fuel' ? 'burned by bots and leaked' : g === 'chips' ? 'over the warehouse cap' : '';
+  const caption = stage === 0 ? what : stage === 1 ? 'produced' : 'ready to trade';
+  text(caption, W / 2, top + 20, 26, stage === 0 ? '#ff6b6b' : stage === 1 ? '#6be3a2' : '#c8d2e3', 'center', 800);
+  rows.forEach((row, i) => {
+    const L = row.ledger[g];
+    const low = L.before - L.used - L.spoiled;
+    let v;
+    let tag = '';
+    let tagColor = '#fff';
+    if (stage === 0) {
+      v = L.before + (low - L.before) * (age / FALL);
+      if (L.used + L.spoiled) {
+        tag = `−${L.used + L.spoiled}`;
+        tagColor = '#ff6b6b';
+      }
+    } else if (stage === 1) {
+      v = low + L.produced * ((age - FALL) / RISE);
+      if (L.produced) {
+        tag = `+${L.produced}`;
+        tagColor = '#6be3a2';
+      }
+    } else v = L.after;
+    const bw = 160;
+    const x = 480 + i * 320 - bw / 2;
+    const bh = Math.max(0, (v / scale) * maxH);
+    ctx.fillStyle = PCOL[row.seat];
+    rr(x, baseY - bh, bw, bh, 10);
     ctx.fill();
-    text(o.name.toUpperCase(), gx, baseY - maxH - 34, 24, o.color, 'center', 800);
-    ctx.strokeStyle = '#2a3447';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(gx - 170, baseY);
-    ctx.lineTo(gx + 170, baseY);
-    ctx.stroke();
-
-    r.rows.forEach((row, i) => {
-      const L = row.ledger[g];
-      let v;
-      let tag = '';
-      let tagColor = '#fff';
-      const low = L.before - L.used - L.spoiled;
-      if (k < gi) v = L.after;
-      else if (k > gi) v = L.before;
-      else if (within < FALL) {
-        v = L.before + (low - L.before) * (within / FALL);
-        if (L.used + L.spoiled) {
-          tag = `−${L.used + L.spoiled}`;
-          tagColor = '#ff6b6b';
-        }
-      } else if (within < FALL + RISE) {
-        v = low + L.produced * ((within - FALL) / RISE);
-        if (L.produced) {
-          tag = `+${L.produced}`;
-          tagColor = '#6be3a2';
-        }
-      } else v = L.after;
-      const bw = 64;
-      const bx = gx - 150 + i * 84;
-      const bh = Math.max(0, (v / scale) * maxH);
-      ctx.fillStyle = PCOL[row.seat];
-      ctx.globalAlpha = k > gi ? 0.45 : 1;
-      rr(bx, baseY - bh, bw, bh, 6);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      text(String(Math.round(v)), bx + bw / 2, baseY - bh - 16, 22, '#f1f4f8', 'center', 800);
-      if (tag) text(tag, bx + bw / 2, baseY - bh - 42, 20, tagColor, 'center', 800);
-      text(game.players[row.seat].name.replace('Hedgie ', 'H').replace('Ape ', 'A'), bx + bw / 2, baseY + 18, 16, '#9aa7bd', 'center', 600);
-    });
-    if (k === 0 && active) {
-      const label = within < FALL ? 'eating and spoilage' : within < FALL + RISE ? 'production' : '';
-      if (label) text(label, gx, baseY + 44, 18, '#c8d2e3', 'center', 500);
-    } else if (active) {
-      const label = within < FALL ? (k === 1 ? 'bots burning fuel, leaks' : 'spoilage') : within < FALL + RISE ? 'production' : '';
-      if (label) text(label, gx, baseY + 44, 18, '#c8d2e3', 'center', 500);
-    }
+    text(String(Math.round(v)), x + bw / 2, baseY - bh - 22, 32, '#f1f4f8', 'center', 800);
+    if (tag) text(tag, x + bw / 2, baseY - bh - 56, 26, tagColor, 'center', 800);
+    text(game.players[row.seat].name, x + bw / 2, baseY + 24, 20, '#c8d2e3', 'center', 600);
   });
-  text(`You eat ${C.foodNeed(game.round)} tendies a round and each non-fuel bot burns 1 fuel · half of any surplus spoils · A to continue (${Math.ceil(r.t)})`, W / 2, 925, 20, '#9aa7bd', 'center', 500);
+  text(stage === 2 ? 'A to open the floor' : '', W / 2, 910, 26, '#f1f4f8', 'center', 800);
 }
 
 let landSfx = '';
@@ -837,7 +886,7 @@ function drawLand(now) {
   ctx.translate(px + 60, py + 110);
   ctx.scale(2, 2);
   paintTerrain(t, 0, 0, C.TILE_W - 6, C.TILE_H - 6);
-  if (t.bot >= 0) drawBot((C.TILE_W - 6) / 2, (C.TILE_H - 6) / 2 + 12, t.bot, 1.05);
+  if (t.bot >= 0) drawBot((C.TILE_W - 6) / 2, (C.TILE_H - 6) / 2 + 12, t.bot, 1.05, { now });
   ctx.restore();
   const kind = { plain: 'Plains', dip: 'The Dip', crater: 'Crater', ridge: `Ridge, ${t.level} peak${t.level > 1 ? 's' : ''}` }[t.type];
   text(kind, px + 60 + (C.TILE_W - 6), py + 420, 30, '#f1f4f8', 'center', 800);
@@ -1007,18 +1056,18 @@ function drawGame(now) {
     else if (tu.assay === 'need-sample') hint = 'Stand on a plot and press A to take a sample';
     else if (tu.assay === 'have-sample') hint = 'Take the sample back to the Assay Office';
     else if (tu.listing) hint = 'A on a plot you own lists it for sale (A again withdraws) · B ends turn';
-    else hint = 'Walk into The Exchange for a bot · A on the Whale catches it · B ends turn';
+    else hint = 'Walk into The Exchange for a bot · stand on a Bitcoin and press A to grab it · B ends turn';
     drawTopBar(`${p.name}: ${hint}`);
     drawTimer(tu);
     if (tu.scene === 'town') drawTown(now);
     else {
       drawMap(now);
-      if (tu.hasBot) drawBot(tu.bx, tu.by, tu.outfit, 0.9);
+      if (tu.hasBot) drawBot(tu.bx, tu.by, tu.outfit, 0.9, { now, moving: tu.moving, facing: tu.facing });
       drawWalker(tu.x, tu.y, PCOL[tu.seat], p.kind === 'ai', tu.facing);
       if (tu.assay === 'have-sample') text('🧪', tu.x + 34, tu.y - 40, 30, '#fff', 'center');
       game.runaways.forEach((r) => {
         const wob = Math.sin(now / 45) * 9;
-        drawBot(r.x + wob, r.y, r.outfit, 0.9);
+        drawBot(r.x + wob, r.y, r.outfit, 0.9, { now, moving: true, facing: r.vx >= 0 ? 1 : -1 });
         text('!', r.x + wob + 30, r.y - 44, 40, '#ff6b6b', 'center', 800);
       });
     }

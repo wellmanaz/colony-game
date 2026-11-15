@@ -13,7 +13,10 @@ export const MAP_H = ROWS * TILE_H;
 export const EXCHANGE_X = MAP_X + 5 * TILE_W;
 export const EXCHANGE_Y = MAP_Y + 3 * TILE_H;
 
-export const CLAIM_DWELL = 0.45; // seconds the scanner rests on each plot
+export const CLAIM_DWELL = 0.3; // seconds the scanner rests on each plot
+export const COIN_TIME = 1.5; // how long a Bitcoin stays visible
+export const COIN_RADIUS = 40; // how close you must be to grab it
+export const CHART_TIME = 2.2; // fall + rise of the production chart
 export const FULL_TURN = 32; // seconds of a turn with a full belly
 export const WALK_SPEED = 460; // pixels per second
 export const AI_SPEED = 1; // AI turns run at human speed (raise to fast-forward Hedgie turns)
@@ -66,7 +69,7 @@ export function foodNeed(round) {
   return round <= 4 ? 3 : round <= 8 ? 4 : 5;
 }
 
-export function whaleReward(round) {
+export function coinReward(round) {
   return round <= 3 ? 100 : round <= 7 ? 200 : round <= 11 ? 300 : 400;
 }
 
@@ -245,6 +248,7 @@ export function newGame(seatDefs, rng = Math.random, opts = {}) {
     rng,
     rounds: opts.rounds || ROUNDS,
     protect: !!opts.protect, // stop players selling the tendies and fuel they need
+    humanPace: !!opts.humanPace, // keep human-length timers even in AI-only games
     tiles: makeMap(rng),
     players: seatDefs.map((d, i) => ({
       index: i,
@@ -278,7 +282,7 @@ export function newGame(seatDefs, rng = Math.random, opts = {}) {
     toasts: [],
     flash: null,
     runaways: [],
-    whale: null,
+    coin: null,
     globalEventsUsed: {},
     playerEventsUsed: {},
     result: null,
@@ -286,6 +290,11 @@ export function newGame(seatDefs, rng = Math.random, opts = {}) {
   };
   startRound(s);
   return s;
+}
+
+// AI-only games hurry through the screens nobody is watching.
+function quick(s) {
+  return !s.humanPace && s.players.every((p) => p.kind === 'ai');
 }
 
 function setBanner(s, text, seconds) {
@@ -438,7 +447,7 @@ function updateLand(s, inputs, dt) {
       L.result = `No bids over $${lot.min} — unsold, and the auction closes for this round`;
     }
     L.stage = 'result';
-    L.t = s.players.every((p) => p.kind === 'ai') ? 0.8 : 3;
+    L.t = quick(s) ? 0.8 : 3;
     return;
   }
   L.t -= dt;
@@ -485,10 +494,10 @@ function startTurn(s, seat) {
     assay: 'none',
     sampleTile: -1,
     listing: false,
-    whaleCaught: false,
+    coinCaught: false,
     idle: 0,
   };
-  s.whale = null;
+  s.coin = null;
   let msg = `${p.name} — your turn`;
   if (p.foodShort > 0) msg += ` (short on tendies: ${length}s)`;
   setBanner(s, msg, 1.4);
@@ -514,7 +523,7 @@ function endTurn(s) {
     s.store.bots++;
     tu.hasBot = false;
   }
-  s.whale = null;
+  s.coin = null;
   s.turnIdx++;
   if (s.turnIdx < s.order.length) startTurn(s, s.order[s.turnIdx]);
   else startProduction(s);
@@ -588,18 +597,21 @@ function enterBuilding(s, tu, b) {
   }
 }
 
-function updateWhale(s, dt) {
-  if (s.whale) {
-    s.whale.t -= dt;
-    if (s.whale.t <= 0) s.whale = null;
+// A Bitcoin blinks into view somewhere on the map for a moment. Grab it
+// while it is visible, standing right on it, and it pays out.
+function updateCoin(s, dt) {
+  if (s.coin) {
+    s.coin.t -= dt;
+    if (s.coin.t <= 0) s.coin = null;
     return;
   }
   const tu = s.turn;
-  if (tu.whaleCaught || tu.scene !== 'map' || tu.t < 4) return;
-  if (s.rng() < dt * 0.12) {
-    const ridges = s.tiles.filter((t) => t.type === 'ridge');
-    const t = ridges[Math.floor(s.rng() * ridges.length)];
-    s.whale = { tile: tileIndex(t.c, t.r), t: 3.2 };
+  if (tu.coinCaught || tu.scene !== 'map' || tu.t < 3) return;
+  if (s.rng() < dt * 0.22) {
+    const spots = s.tiles.filter((t) => !t.exchange);
+    const t = spots[Math.floor(s.rng() * spots.length)];
+    const c = tileCenter(t);
+    s.coin = { x: c.x + (s.rng() - 0.5) * 100, y: c.y + (s.rng() - 0.5) * 70, t: COIN_TIME };
   }
 }
 
@@ -617,6 +629,7 @@ function updateWalk(s, inputs, dt) {
     iy /= mag;
   }
   const moving = mag > 0.1;
+  tu.moving = moving;
   tu.x += ix * WALK_SPEED * dt;
   tu.y += iy * WALK_SPEED * dt;
   if (Math.abs(ix) > 0.1) tu.facing = ix > 0 ? 1 : -1;
@@ -669,13 +682,13 @@ function updateWalk(s, inputs, dt) {
           tu.outfit = -1;
           s.flash = { tile: tileIndex(botTile.c, botTile.r), t: 0.5 };
         }
-      } else if (s.whale && s.whale.tile === tileIndex(here.c, here.r)) {
-        const win = whaleReward(s.round);
+      } else if (s.coin && Math.hypot(s.coin.x - tu.x, s.coin.y - tu.y) <= COIN_RADIUS) {
+        const win = coinReward(s.round);
         player.money += win;
         player.whales++;
-        tu.whaleCaught = true;
-        s.whale = null;
-        toast(s, `${player.name} caught the Whale! It paid $${win} to be let go`, 3);
+        tu.coinCaught = true;
+        s.coin = null;
+        toast(s, `${player.name} grabbed a Bitcoin and cashed it for $${win}!`, 3);
       } else if (tu.assay === 'need-sample') {
         tu.assay = 'have-sample';
         tu.sampleTile = tileIndex(here.c, here.r);
@@ -692,7 +705,7 @@ function updateWalk(s, inputs, dt) {
   tu.bx += (tu.x - tu.facing * 58 - tu.bx) * follow;
   tu.by += (tu.y + 6 - tu.by) * follow;
 
-  updateWhale(s, dt);
+  updateCoin(s, dt);
 
   // Standing still burns the clock twice as fast.
   tu.t -= moving ? dt : dt * 2;
@@ -873,14 +886,16 @@ function startProduction(s) {
     if (p.foodShort) notes.push(`${p.name} went hungry (${p.foodShort} short) — a shorter turn next round`);
     return { seat, gained, ledger, dark: dark.size, bears: bearTile >= 0 };
   });
-  const allAI = s.players.every((p) => p.kind === 'ai');
-  s.report = { event, notes, rows, t: allAI ? 2 : 16, age: 0 };
+  // The charts come one good at a time, right before that good's auction.
+  // This screen only shows the event of the round, if there was one.
+  const somethingToSay = event || notes.length;
+  s.report = { event, notes, rows, t: !somethingToSay ? 0.01 : quick(s) ? 1 : 6, age: 0 };
 }
 
 function updateReport(s, inputs, dt) {
   s.report.t -= dt;
   s.report.age += dt;
-  const skip = s.report.age > 1.5 && s.players.some((p) => p.kind === 'human' && inputs[p.index].a);
+  const skip = s.report.age > 1 && s.players.some((p) => p.kind === 'human' && inputs[p.index].a);
   if (s.report.t <= 0 || skip) startAuction(s, 0);
 }
 
@@ -889,14 +904,15 @@ function updateReport(s, inputs, dt) {
 function startAuction(s, gi) {
   s.phase = 'auction';
   const good = GOODS[gi];
-  const allAI = s.players.every((p) => p.kind === 'ai');
+  const allAI = quick(s);
   const dry = good === 'diamonds' || s.store.stock[good] <= 0;
   const axisMax = Math.min(400, dry ? Math.max(300, Math.ceil((s.store.sell[good] * 3) / 50) * 50) : Math.max(150, Math.ceil((s.store.sell[good] * 2) / 50) * 50));
   s.auction = {
     gi,
     good,
-    stage: 'declare',
-    t: allAI ? 0.5 : 6,
+    stage: 'chart',
+    t: allAI ? 0.3 : CHART_TIME + 2.5,
+    age: 0,
     // Everyone is on the floor: you start as a seller if you have some, else a buyer.
     roles: s.players.map((p, i) => (p.goods[good] > criticalLevel(s, i, good) ? 'sell' : 'buy')),
     price: s.players.map(() => 0),
@@ -917,6 +933,16 @@ function updateAuction(s, inputs, dt) {
   const a = s.auction;
   const good = a.good;
   const st = s.store;
+  if (a.stage === 'chart') {
+    a.t -= dt;
+    a.age += dt;
+    const skip = a.age > CHART_TIME && s.players.some((p) => p.kind === 'human' && inputs[p.index].a);
+    if (a.t <= 0 || skip) {
+      a.stage = 'declare';
+      a.t = quick(s) ? 0.5 : 6;
+    }
+    return;
+  }
   if (a.stage === 'declare') {
     s.players.forEach((p, i) => {
       const inp = inputs[i];
@@ -1093,7 +1119,7 @@ function startSummary(s) {
 
   const ranks = ranking(s);
   s.summary = {
-    t: s.players.every((p) => p.kind === 'ai') ? 2 : 10,
+    t: quick(s) ? 2 : 10,
     rows: ranks.map((p) => ({ seat: p.index, worth: netWorth(s, p) })),
     colony: s.players.reduce((n, p) => n + netWorth(s, p), 0),
     botsBuilt: builds,

@@ -245,11 +245,11 @@ function walkTurn(s, seat, mem, inp, dt) {
     }
     return;
   }
-  if (s.whale && !tu.whaleCaught) {
-    const c = C.tileCenter(s.tiles[s.whale.tile]);
-    const d = Math.hypot(c.x - tu.x, c.y - tu.y);
-    if (d < 520) {
-      if (steerMap(inp, tu, c.x, c.y) < 40) press();
+  if (s.coin && !tu.coinCaught) {
+    const d = Math.hypot(s.coin.x - tu.x, s.coin.y - tu.y);
+    // Only worth a dash if it is close enough to reach before it blinks out.
+    if (d < s.coin.t * C.WALK_SPEED * 0.8) {
+      if (steerMap(inp, tu, s.coin.x, s.coin.y) < 28) press();
       return;
     }
   }
