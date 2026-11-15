@@ -238,15 +238,114 @@ function drawBackground() {
   });
 }
 
-// Fast-food signs for tendies plots. Parodies drawn in code, unless real
-// images are supplied in assets/food/1.png, 2.png, ... which take over.
-const FOOD_SIGNS = 6;
+// Fast-food signs for tendies plots: knock-offs of the big chains, drawn
+// in code. Real images in assets/food/1.png, 2.png, ... take over if present.
 const foodImages = [];
-for (let i = 1; i <= 8; i++) {
+for (let i = 1; i <= 24; i++) {
   const img = new Image();
   img.onload = () => foodImages.push(img);
   img.src = `assets/food/${i}.png`;
 }
+
+// Each sign: background, name, name colour, and an emblem drawn in an
+// 80x68 box centred on 0,0 (y from -34 to 34).
+const FOOD_SIGNS = [
+  { bg: '#c8102e', name: "TENDIE'S", fg: '#fff', emblem: () => {
+    ctx.strokeStyle = '#ffc72c'; ctx.lineWidth = 9; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-28, 16); ctx.quadraticCurveTo(-24, -30, -8, -26); ctx.quadraticCurveTo(0, -24, 0, 0);
+    ctx.quadraticCurveTo(0, -24, 8, -26); ctx.quadraticCurveTo(24, -30, 28, 16); ctx.stroke();
+  } },
+  { bg: '#fff', name: 'COLONEL', fg: '#e4002b', emblem: () => {
+    ctx.fillStyle = '#e4002b'; ctx.beginPath(); ctx.moveTo(-26, -22); ctx.lineTo(26, -22); ctx.lineTo(18, 24); ctx.lineTo(-18, 24); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#fff'; [-14, 0, 14].forEach((sx) => { ctx.beginPath(); ctx.moveTo(sx - 4, -22); ctx.lineTo(sx + 4, -22); ctx.lineTo(sx + 3, 24); ctx.lineTo(sx - 3, 24); ctx.closePath(); ctx.fill(); });
+    ctx.fillStyle = '#e4002b'; rr(-28, -30, 56, 10, 4); ctx.fill();
+  } },
+  { bg: '#f5ebdc', name: 'NUGGET KING', fg: '#d62300', emblem: () => {
+    ctx.fillStyle = '#d62300'; rr(-30, -2, 60, 22, 11); ctx.fill();
+    ctx.fillStyle = '#ffaa00'; ctx.beginPath(); ctx.moveTo(-26, -6); ctx.lineTo(-26, -28); ctx.lineTo(-13, -16); ctx.lineTo(0, -32); ctx.lineTo(13, -16); ctx.lineTo(26, -28); ctx.lineTo(26, -6); ctx.closePath(); ctx.fill();
+  } },
+  { bg: '#dd0031', name: 'CHICK-FIL-APE', fg: '#fff', emblem: () => {
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-4, -4, 16, 0, 7); ctx.fill();
+    ctx.fillStyle = '#dd0031'; ctx.beginPath(); ctx.moveTo(10, -8); ctx.lineTo(22, -4); ctx.lineTo(10, 0); ctx.fill();
+    ctx.beginPath(); ctx.arc(-8, -8, 2.5, 0, 7); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(-10, -22); ctx.lineTo(-4, -30); ctx.lineTo(2, -22); ctx.fill();
+  } },
+  { bg: '#0b4ea2', name: "WENDIE'S", fg: '#fff', emblem: () => {
+    // red pigtails girl in a white circle
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(0, -4, 20, 0, 7); ctx.fill();
+    ctx.fillStyle = '#e2231a'; ctx.beginPath(); ctx.arc(-14, -6, 7, 0, 7); ctx.arc(14, -6, 7, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, -14, 12, 7, 0, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = '#f5d2b8'; ctx.beginPath(); ctx.arc(0, -4, 9, 0, 7); ctx.fill();
+    ctx.fillStyle = '#141821'; ctx.beginPath(); ctx.arc(-3, -5, 1.4, 0, 7); ctx.arc(3, -5, 1.4, 0, 7); ctx.fill();
+    ctx.fillStyle = '#e2231a'; [[-4, -10], [0, -12], [4, -10]].forEach(([fx, fy]) => { ctx.beginPath(); ctx.arc(fx, fy, 2.5, 0, 7); ctx.fill(); });
+  } },
+  { bg: '#f68b1f', name: "POP-APE'S", fg: '#fff', emblem: () => {
+    ctx.fillStyle = '#fff'; rr(-24, -26, 48, 40, 8); ctx.fill();
+    text('P', 0, -6, 34, '#f68b1f', 'center', 800);
+    ctx.fillStyle = '#c8102e'; rr(-24, 6, 48, 8, 3); ctx.fill();
+  } },
+  { bg: '#e21836', name: "RAISING GAIN'S", fg: '#fff', emblem: () => {
+    // a chicken finger and a yellow dog-tag
+    ctx.fillStyle = '#e8b04a'; rr(-22, -10, 44, 14, 7); ctx.fill();
+    ctx.fillStyle = '#c98a2e'; ctx.beginPath(); ctx.arc(-10, -3, 2, 0, 7); ctx.arc(4, -1, 2, 0, 7); ctx.arc(14, -5, 2, 0, 7); ctx.fill();
+    ctx.fillStyle = '#ffd200'; rr(-8, -30, 16, 14, 7); ctx.fill();
+  } },
+  { bg: '#1b3f94', name: "ZAPE-BY'S", fg: '#fff', emblem: () => {
+    ctx.fillStyle = '#e2231a'; ctx.beginPath(); ctx.moveTo(-24, -24); ctx.lineTo(24, -24); ctx.lineTo(24, -14); ctx.lineTo(-8, 10); ctx.lineTo(24, 10); ctx.lineTo(24, 20); ctx.lineTo(-24, 20); ctx.lineTo(-24, 10); ctx.lineTo(8, -14); ctx.lineTo(-24, -14); ctx.closePath(); ctx.fill();
+  } },
+  { bg: '#2b6cd4', name: 'MOONIC DRIVE-IN', fg: '#fff', emblem: () => {
+    ctx.fillStyle = '#ffd200'; ctx.beginPath(); ctx.moveTo(-30, 6); ctx.lineTo(10, -22); ctx.lineTo(4, -4); ctx.lineTo(30, -8); ctx.lineTo(-6, 18); ctx.lineTo(0, 4); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#e2231a'; ctx.beginPath(); ctx.arc(14, 10, 7, 0, 7); ctx.fill();
+  } },
+  { bg: '#d02027', name: 'APE IN THE BOX', fg: '#fff', emblem: () => {
+    ctx.fillStyle = '#fff'; rr(-18, -24, 36, 36, 6); ctx.fill();
+    ctx.fillStyle = '#d02027'; ctx.beginPath(); ctx.arc(-7, -8, 3, 0, 7); ctx.arc(7, -8, 3, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#d02027'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(0, 0, 8, 0.2, Math.PI - 0.2); ctx.stroke();
+    ctx.fillStyle = '#ffd200'; ctx.beginPath(); ctx.moveTo(-10, -24); ctx.lineTo(0, -34); ctx.lineTo(10, -24); ctx.fill();
+  } },
+  { bg: '#fff', name: "APE-BY'S", fg: '#c8102e', emblem: () => {
+    // ten-gallon hat outline
+    ctx.strokeStyle = '#c8102e'; ctx.lineWidth = 5; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(-30, 8); ctx.lineTo(30, 8); ctx.lineTo(24, 2); ctx.lineTo(18, -24); ctx.lineTo(-18, -24); ctx.lineTo(-24, 2); ctx.closePath(); ctx.stroke();
+    ctx.fillStyle = '#c8102e'; rr(-30, 8, 60, 6, 3); ctx.fill();
+  } },
+  { bg: '#ff7a1a', name: 'WHATATENDIE', fg: '#fff', emblem: () => {
+    for (let i = -3; i <= 3; i++) { ctx.fillStyle = i % 2 ? '#fff' : '#ff7a1a'; ctx.fillRect(-32, i * 8 - 8, 64, 8); }
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(-14, -32); ctx.lineTo(14, -32); ctx.lineTo(10, -14); ctx.lineTo(-10, -14); ctx.closePath(); ctx.fill();
+    text('W', 0, -23, 14, '#ff7a1a', 'center', 800);
+  } },
+  { bg: '#d9262c', name: 'FIVE APES', fg: '#fff', emblem: () => {
+    ctx.fillStyle = '#fff'; rr(-30, -20, 60, 32, 4); ctx.fill();
+    text('FIVE', 0, -11, 14, '#d9262c', 'center', 800); text('APES', 0, 3, 14, '#d9262c', 'center', 800);
+    ctx.fillStyle = '#e8b04a'; for (let i = 0; i < 5; i++) { rr(-26 + i * 11, 16, 6, 14, 2); ctx.fill(); }
+  } },
+  { bg: '#1a1a1a', name: 'SHAKE SHAQ', fg: '#7ac142', emblem: () => {
+    ctx.fillStyle = '#7ac142'; rr(-22, -10, 44, 18, 9); ctx.fill();
+    ctx.fillStyle = '#fff'; rr(-18, -22, 36, 10, 5); ctx.fill();
+    ctx.fillStyle = '#f5d2b8'; rr(-18, 8, 36, 10, 5); ctx.fill();
+    ctx.fillStyle = '#7ac142'; ctx.beginPath(); ctx.arc(0, -28, 5, 0, 7); ctx.fill();
+  } },
+  { bg: '#005daa', name: "CULVERT'S", fg: '#fff', emblem: () => {
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.ellipse(0, 2, 26, 12, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#9fd3ff'; ctx.beginPath(); ctx.ellipse(0, 2, 26, 12, 0, 0, Math.PI); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(-10, -2); ctx.quadraticCurveTo(0, -34, 10, -2); ctx.fill();
+  } },
+  { bg: '#ffcf00', name: 'BRO-JANGLES', fg: '#c8102e', emblem: () => {
+    ctx.fillStyle = '#c8102e'; ctx.beginPath(); ctx.moveTo(-30, 10); ctx.lineTo(30, 10); ctx.lineTo(22, -14); ctx.lineTo(-22, -14); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#e8b04a'; ctx.beginPath(); ctx.arc(-10, -4, 6, 0, 7); ctx.arc(4, -6, 7, 0, 7); ctx.arc(14, -2, 5, 0, 7); ctx.fill();
+  } },
+  { bg: '#fff', name: 'IN-N-APE', fg: '#c8102e', emblem: () => {
+    ctx.fillStyle = '#ffd100'; ctx.beginPath(); ctx.moveTo(-34, 6); ctx.lineTo(14, -22); ctx.lineTo(10, -8); ctx.lineTo(34, -2); ctx.lineTo(8, 10); ctx.lineTo(12, -4); ctx.closePath(); ctx.fill();
+  } },
+  { bg: '#702082', name: 'TACO MOON', fg: '#fff', emblem: () => {
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(-18, 10); ctx.quadraticCurveTo(-18, -24, 0, -26); ctx.quadraticCurveTo(18, -24, 18, 10); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#ff8a00'; ctx.beginPath(); ctx.arc(0, 14, 4, 0, 7); ctx.fill();
+  } },
+  { bg: '#c41230', name: "CHURCH OF TENDIE", fg: '#fff', emblem: () => {
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(-22, 12); ctx.lineTo(-22, -8); ctx.lineTo(0, -28); ctx.lineTo(22, -8); ctx.lineTo(22, 12); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#c41230'; rr(-5, -2, 10, 14, 2); ctx.fill();
+  } },
+];
 
 function drawFoodSign(which, x, y, w, h) {
   if (foodImages.length) {
@@ -255,139 +354,21 @@ function drawFoodSign(which, x, y, w, h) {
     ctx.drawImage(img, x - (img.width * s) / 2, y - (img.height * s) / 2, img.width * s, img.height * s);
     return;
   }
+  const sign = FOOD_SIGNS[which % FOOD_SIGNS.length];
   const k = Math.min(w, h) / 80;
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(k, k);
-  const sign = (bg, radius = 10) => {
-    ctx.fillStyle = bg;
-    rr(-40, -34, 80, 68, radius);
-    ctx.fill();
-  };
-  const label = (str, dy, size, color) => text(str, 0, dy, size, color, 'center', 800);
-  switch (which % FOOD_SIGNS) {
-    case 0: {
-      // golden double arch
-      sign('#c8102e');
-      ctx.strokeStyle = '#ffc72c';
-      ctx.lineWidth = 9;
-      ctx.lineCap = 'round';
-      ctx.beginPath();
-      ctx.moveTo(-28, 16);
-      ctx.quadraticCurveTo(-24, -30, -8, -26);
-      ctx.quadraticCurveTo(0, -24, 0, 0);
-      ctx.quadraticCurveTo(0, -24, 8, -26);
-      ctx.quadraticCurveTo(24, -30, 28, 16);
-      ctx.stroke();
-      label("TENDIE'S", 27, 9, '#fff');
-      break;
-    }
-    case 1: {
-      // striped bucket
-      sign('#fff', 10);
-      ctx.fillStyle = '#e4002b';
-      ctx.beginPath();
-      ctx.moveTo(-26, -22);
-      ctx.lineTo(26, -22);
-      ctx.lineTo(18, 24);
-      ctx.lineTo(-18, 24);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = '#fff';
-      [-14, 0, 14].forEach((sx) => {
-        ctx.beginPath();
-        ctx.moveTo(sx - 4, -22);
-        ctx.lineTo(sx + 4, -22);
-        ctx.lineTo(sx + 3, 24);
-        ctx.lineTo(sx - 3, 24);
-        ctx.closePath();
-        ctx.fill();
-      });
-      ctx.fillStyle = '#e4002b';
-      rr(-28, -30, 56, 10, 4);
-      ctx.fill();
-      label('COLONEL', 28, 8, '#e4002b');
-      break;
-    }
-    case 2: {
-      // crown on a bun
-      sign('#f5ebdc');
-      ctx.fillStyle = '#d62300';
-      rr(-30, -2, 60, 22, 11);
-      ctx.fill();
-      ctx.fillStyle = '#ffaa00';
-      ctx.beginPath();
-      ctx.moveTo(-26, -6);
-      ctx.lineTo(-26, -28);
-      ctx.lineTo(-13, -16);
-      ctx.lineTo(0, -32);
-      ctx.lineTo(13, -16);
-      ctx.lineTo(26, -28);
-      ctx.lineTo(26, -6);
-      ctx.closePath();
-      ctx.fill();
-      label('NUGGET KING', 27, 8, '#d62300');
-      break;
-    }
-    case 3: {
-      // red chicken badge
-      sign('#dd0031');
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(-4, -4, 16, 0, 7);
-      ctx.fill();
-      ctx.fillStyle = '#dd0031';
-      ctx.beginPath();
-      ctx.moveTo(10, -8);
-      ctx.lineTo(22, -4);
-      ctx.lineTo(10, 0);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(-8, -8, 2.5, 0, 7);
-      ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.moveTo(-10, -22);
-      ctx.lineTo(-4, -30);
-      ctx.lineTo(2, -22);
-      ctx.fill();
-      label('CHICK-FIL-APE', 27, 7.5, '#fff');
-      break;
-    }
-    case 4: {
-      // yellow arrow drive-thru
-      sign('#fff');
-      ctx.fillStyle = '#ffd100';
-      ctx.beginPath();
-      ctx.moveTo(-34, 6);
-      ctx.lineTo(14, -22);
-      ctx.lineTo(10, -8);
-      ctx.lineTo(34, -2);
-      ctx.lineTo(8, 10);
-      ctx.lineTo(12, -4);
-      ctx.closePath();
-      ctx.fill();
-      label('IN-N-APE', 24, 10, '#c8102e');
-      break;
-    }
-    default: {
-      // purple bell
-      sign('#702082');
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.moveTo(-18, 10);
-      ctx.quadraticCurveTo(-18, -24, 0, -26);
-      ctx.quadraticCurveTo(18, -24, 18, 10);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillStyle = '#ff8a00';
-      ctx.beginPath();
-      ctx.arc(0, 14, 4, 0, 7);
-      ctx.fill();
-      label('TACO MOON', 28, 8, '#fff');
-      break;
-    }
-  }
+  ctx.fillStyle = sign.bg;
+  rr(-40, -34, 80, 68, 10);
+  ctx.fill();
+  ctx.save();
+  ctx.translate(0, -6);
+  ctx.scale(0.8, 0.8);
+  sign.emblem();
+  ctx.restore();
+  const size = sign.name.length > 11 ? 6.5 : 8.5;
+  text(sign.name, 0, 27, size, sign.fg, 'center', 800);
   ctx.restore();
 }
 
@@ -1028,7 +1009,7 @@ function drawTile(t, now) {
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
   }
-  if (t.bot === 0) drawFoodSign(C.tileIndex(t.c, t.r), x + w / 2, y + h / 2 + 4, 92, 78);
+  if (t.bot === 0) drawFoodSign(C.tileIndex(t.c, t.r) * 7 + game.salt, x + w / 2, y + h / 2 + 4, 92, 78);
   else if (t.bot >= 0) drawBot(x + w / 2, y + h / 2 + 12, t.bot, 1.05, { now });
 }
 
@@ -1490,7 +1471,7 @@ function drawLand(now) {
   ctx.translate(px + 60, py + 110);
   ctx.scale(2, 2);
   paintTerrain(t, 0, 0, C.TILE_W - 6, C.TILE_H - 6);
-  if (t.bot === 0) drawFoodSign(lot.tile, (C.TILE_W - 6) / 2, (C.TILE_H - 6) / 2 + 4, 92, 78);
+  if (t.bot === 0) drawFoodSign(lot.tile * 7 + game.salt, (C.TILE_W - 6) / 2, (C.TILE_H - 6) / 2 + 4, 92, 78);
   else if (t.bot >= 0) drawBot((C.TILE_W - 6) / 2, (C.TILE_H - 6) / 2 + 12, t.bot, 1.05, { now });
   ctx.restore();
   const kind = { plain: 'Plains', dip: 'The Dip', crater: 'Crater', ridge: `Ridge, ${t.level} peak${t.level > 1 ? 's' : ''}` }[t.type];
@@ -1690,6 +1671,11 @@ function drawGame(now) {
 
 function drawLobby() {
   drawBackground();
+  if (PARAMS.has('signs')) {
+    // debug: every fast-food sign at tile size
+    FOOD_SIGNS.forEach((sg, i) => drawFoodSign(i, 160 + (i % 7) * 240, 160 + Math.floor(i / 7) * 220, 184, 156));
+    return;
+  }
   text('TENDIE TOWN', W / 2, 110, 100, '#3ddc84', 'center', 800);
   text('The apes made it to the moon. Now somebody has to run the place.', W / 2, 190, 30, '#c8d2e3', 'center', 500);
   const joined = lobby.filter(Boolean);

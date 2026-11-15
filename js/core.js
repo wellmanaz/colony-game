@@ -305,6 +305,7 @@ export function newGame(seatDefs, rng = Math.random, opts = {}) {
     globalEventsUsed: {},
     playerEventsUsed: {},
     result: null,
+    salt: Math.floor(rng() * 1000), // varies cosmetic picks between games
     stats: { bolts: {}, pub: 0, pubMoney: 0, botsBought: 0, timeouts: 0, landSold: 0, landUnsold: 0, landMoney: 0 },
   };
   startRound(s);
