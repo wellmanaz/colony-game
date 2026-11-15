@@ -12,7 +12,7 @@ const PARAMS = new URLSearchParams(location.search);
 const DEMO = PARAMS.has('demo'); // AI-only game that starts by itself
 const SKIP = Number(PARAMS.get('skip')) || 0; // demo only: seconds to fast-forward at start
 const UNTIL = PARAMS.get('until') || ''; // demo only: fast-forward until a phase (e.g. auction:trade), then SKIP more seconds
-const opts = { rounds: Number(PARAMS.get('rounds')) === 6 ? 6 : 12, protect: PARAMS.has('protect'), humanPace: PARAMS.get('pace') === 'human' };
+const opts = { rounds: Number(PARAMS.get('rounds')) === 6 ? 6 : 12, protect: PARAMS.has('protect'), humanPace: PARAMS.get('pace') === 'human', ownBots: PARAMS.has('ownbots') };
 
 const music = new Music();
 // Background track: the M.U.L.E. main theme (Roy Glover), streamed from the
@@ -59,7 +59,7 @@ function pollPads() {
     const px = padPrevX[i] || 0;
     const left = (x < -0.5 && px >= -0.5) || edge(14);
     const right = (x > 0.5 && px <= 0.5) || edge(15);
-    padIn.push({ x, y, a: edge(0), b: edge(1), alt: edge(2), start: edge(9), music: edge(3), lb: edge(4), left, right });
+    padIn.push({ x, y, a: edge(0), b: edge(1), alt: edge(2), start: edge(9), music: edge(3), lb: edge(4), rb: edge(5), left, right });
     if (down.some((d, k) => d && !prev[k])) music.start();
     padPrev[i] = down;
     padPrevX[i] = x;
@@ -88,6 +88,7 @@ function keyboardInput() {
     start: keysHit.has('Enter'),
     music: keysHit.has('KeyM'),
     lb: keysHit.has('KeyP'),
+    rb: keysHit.has('KeyO'),
     left: keysHit.has('ArrowLeft') || keysHit.has('KeyA'),
     right: keysHit.has('ArrowRight') || keysHit.has('KeyD'),
   };
@@ -138,10 +139,12 @@ function updateLobby() {
     if (p.start) start = true;
     if (p.alt) opts.rounds = opts.rounds === 12 ? 6 : 12;
     if (p.lb) opts.protect = !opts.protect;
+    if (p.rb) opts.ownBots = !opts.ownBots;
   });
   const kb = keyboardInput();
   if (kb.alt) opts.rounds = opts.rounds === 12 ? 6 : 12;
   if (kb.lb) opts.protect = !opts.protect;
+  if (kb.rb) opts.ownBots = !opts.ownBots;
   const kbSeat = lobby.findIndex((s) => s && s.src === 'kbd');
   lobbySeatInput(kb, kbSeat, (base) => ({ src: 'kbd', ...base }));
   if (kb.start) start = true;
@@ -1307,14 +1310,23 @@ function drawLobby() {
   }
   const canStart = allReady;
   text(joined.length && !allReady ? 'Waiting for everyone to press A' : 'Press the Menu button to start', W / 2, 700, 40, canStart ? '#ffffff' : '#7f8ba1', 'center', 800);
-  text(`X: ${opts.rounds} rounds (${opts.rounds === 12 ? 'full game' : 'short game'})   ·   LB: starvation protection ${opts.protect ? 'ON — you cannot sell food and fuel you need' : 'OFF — sell whatever you like, go hungry if you must'}`, W / 2, 748, 22, '#ffd84d', 'center', 600);
+  text(`X: ${opts.rounds} rounds (${opts.rounds === 12 ? 'full game' : 'short game'})   ·   LB: starvation protection ${opts.protect ? 'ON' : 'OFF'}   ·   RB: build bots from your own chips ${opts.ownBots ? 'ON' : 'OFF'}`, W / 2, 748, 22, '#ffd84d', 'center', 600);
+  text(
+    `${opts.protect ? 'You cannot sell the tendies and fuel you need' : 'Sell whatever you like, go hungry if you must'} · ${opts.ownBots ? 'when the Bot Lot is sold out, 2 of your chips and $50 build you a bot' : 'only the Exchange builds bots, from chips it has bought'}`,
+    W / 2,
+    776,
+    18,
+    '#9aa7bd',
+    'center',
+    500
+  );
   const lines = [
     'Each round: grab land → take turns buying and placing bots → production → trading floor',
     'Every turn you eat tendies (3, later 5) and each non-fuel bot burns 1 fuel · run short and your turn gets shorter',
     'The Dip grows tendies · plains and craters pump fuel · ridges mine chips · diamonds are hidden until you assay',
-    `Y or M toggles music${music.muted ? ' (muted)' : ''}${music.custom ? '' : ' (built-in loop)'} · Keyboard: Space = A, B = B, X = X, P = LB, Enter = Menu, arrows move · On Xbox, if the controllers do nothing, switch the browser to controller mode`,
+    `Y or M toggles music${music.muted ? ' (muted)' : ''}${music.custom ? '' : ' (built-in loop)'} · Keyboard: Space = A, B = B, X = X, P = LB, O = RB, Enter = Menu, arrows move · On Xbox, if the controllers do nothing, switch the browser to controller mode`,
   ];
-  lines.forEach((l, k) => text(l, W / 2, 800 + k * 38, k === 3 ? 20 : 23, k === 3 ? '#7f8ba1' : '#c8d2e3', 'center', 500));
+  lines.forEach((l, k) => text(l, W / 2, 818 + k * 36, k === 3 ? 20 : 23, k === 3 ? '#7f8ba1' : '#c8d2e3', 'center', 500));
 }
 
 // ---------- main loop ----------

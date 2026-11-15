@@ -24,6 +24,7 @@ export const DOCK_RADIUS = 40; // how close to a plot's pad the bot must be to i
 export const START_MONEY = 1000;
 export const PLOT_VALUE = 500;
 export const BOT_BASE = 100;
+export const OWN_BOT_FEE = 50; // assembly fee when building a bot from your own chips (option)
 export const PRICE_CAP = 265;
 export const AUCTION_TIME = 16;
 export const PRICE_SPEED = 55; // dollars per second a bid or ask moves
@@ -264,6 +265,7 @@ export function newGame(seatDefs, rng = Math.random, opts = {}) {
     rounds: opts.rounds || ROUNDS,
     protect: !!opts.protect, // stop players selling the tendies and fuel they need
     humanPace: !!opts.humanPace, // keep human-length timers even in AI-only games
+    ownBots: !!opts.ownBots, // option: when the lot is sold out, 2 of your own chips build you a bot
     tiles: makeMap(rng),
     players: seatDefs.map((d, i) => ({
       index: i,
@@ -556,7 +558,21 @@ function enterBuilding(s, tu, b) {
       toast(s, `Bot returned for $${tu.botPaid}`);
     } else {
       const price = botPrice(s);
-      if (price === null) toast(s, 'Bot Lot is sold out — the Exchange needs chips to build more');
+      if (price === null && s.ownBots && p.goods.chips >= 2 && p.money >= OWN_BOT_FEE) {
+        // Sold out, but you brought your own chips.
+        p.goods.chips -= 2;
+        p.money -= OWN_BOT_FEE;
+        tu.hasBot = true;
+        tu.outfit = -1;
+        tu.botPaid = OWN_BOT_FEE;
+        tu.botCount++;
+        s.stats.botsBought++;
+        p.dbg.bought++;
+        tu.bx = tu.x;
+        tu.by = tu.y;
+        toast(s, `Lot is sold out, so they built one from 2 of your chips for $${OWN_BOT_FEE}. Now give it a tool.`);
+      } else if (price === null && s.ownBots) toast(s, `Bot Lot is sold out — bring 2 chips and $${OWN_BOT_FEE} and they'll build you one`);
+      else if (price === null) toast(s, 'Bot Lot is sold out — the Exchange needs chips to build more');
       else if (p.money < price) toast(s, `A bot costs $${price}. Not enough bucks.`);
       else {
         p.money -= price;

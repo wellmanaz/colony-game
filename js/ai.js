@@ -176,7 +176,8 @@ function walkTurn(s, seat, mem, inp, dt) {
       return;
     }
     const target = pickTargetPlot(s, seat);
-    const price = C.botPrice(s);
+    let price = C.botPrice(s);
+    if (price === null && s.ownBots && p.goods.chips >= 2) price = C.OWN_BOT_FEE;
     if (target && price !== null) {
       // Keep a little cash back for food at the auction.
       const outfit = chooseOutfit(s, target, seat, p.money - price - 120);
