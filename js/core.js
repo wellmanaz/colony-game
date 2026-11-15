@@ -45,7 +45,7 @@ const MIN_PRICE = { tendies: 15, fuel: 10, chips: 14, diamonds: 50 };
 // plus a handicap: starting cash and turn length. The Degen also feels
 // random events and the YOLO Bar twice as hard, in both directions.
 export const CHARACTERS = [
-  { id: 'ape', name: 'Ape', blurb: 'Diamond hands · the standard deal', money: 1000, time: 1, swing: 1 },
+  { id: 'ape', name: 'Ape', blurb: 'Apes together strong · the standard deal', money: 1000, time: 1, swing: 1 },
   { id: 'autist', name: 'Autist', blurb: 'Expert · less cash, shorter turns', money: 700, time: 0.85, swing: 1 },
   { id: 'degen', name: 'Degen', blurb: 'Luck and the YOLO Bar hit 2× as hard', money: 1000, time: 1, swing: 2 },
   { id: 'smooth', name: 'Smooth-Brain', blurb: 'Beginner · more cash, longer turns', money: 1400, time: 1.2, swing: 1 },
