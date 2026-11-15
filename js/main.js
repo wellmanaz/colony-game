@@ -98,6 +98,9 @@ function keyboardInput() {
 
 let mode = 'lobby';
 let lobby = new Array(SEATS).fill(null); // { src: 'pad'|'kbd', pad, char, ready }
+// Character each empty seat's CPU player will use: random, but a ready
+// player can change the empty seat to their right with left/right.
+let aiChars = [0, 1, 2, 3].map(() => Math.floor(Math.random() * C.CHARACTERS.length));
 if (PARAMS.has('lobbydemo')) {
   // for screenshots: a lobby with people in it
   lobby = [
@@ -127,7 +130,17 @@ function lobbySeatInput(inp, seat, join) {
     if (inp.right) s.char = (s.char + 1) % C.CHARACTERS.length;
     if (inp.a) s.ready = true;
     else if (inp.b) lobby[seat] = null;
-  } else if (inp.b) s.ready = false;
+  } else {
+    if (inp.b) s.ready = false;
+    if (inp.left || inp.right) {
+      for (let k = 1; k < SEATS; k++) {
+        const j = (seat + k) % SEATS;
+        if (lobby[j]) continue;
+        aiChars[j] = (aiChars[j] + (inp.right ? 1 : C.CHARACTERS.length - 1)) % C.CHARACTERS.length;
+        break;
+      }
+    }
+  }
 }
 
 function updateLobby() {
@@ -156,8 +169,13 @@ function startGame() {
   seats = lobby.slice();
   let hedgies = 0;
   const used = {};
-  const defs = seats.map((s) => {
-    if (!s) return { kind: 'ai', name: `Hedgie ${++hedgies}`, char: 'hedgie' };
+  const defs = seats.map((s, i) => {
+    if (!s) {
+      const c = C.CHARACTERS[aiChars[i]];
+      used[c.id] = (used[c.id] || 0) + 1;
+      hedgies++;
+      return { kind: 'ai', name: `${c.name} CPU`, char: c.id };
+    }
     const c = C.CHARACTERS[s.char];
     used[c.id] = (used[c.id] || 0) + 1;
     return { kind: 'human', name: c.name, char: c.id };
@@ -867,7 +885,7 @@ function drawPanels() {
     ctx.fillStyle = PCOL[i];
     rr(x, y, 16, 104, 8);
     ctx.fill();
-    text(p.name, x + 36, y + 24, 28, '#f1f4f8');
+    text(p.name, x + 36, y + 24, p.name.length > 12 ? 21 : 28, '#f1f4f8');
     text(money(p.money), x + 410, y + 24, 28, '#3ddc84', 'right', 800);
     text(`${C.countPlots(game, i)} plots · ${C.countBots(game, i)} bots`, x + 36, y + 52, 18, '#9aa7bd', 'left', 500);
     let gx = x + 36;
@@ -1364,11 +1382,13 @@ function drawLobby() {
     ctx.lineWidth = s ? 7 : 3;
     ctx.stroke();
     if (!s) {
-      ctx.globalAlpha = 0.5;
-      drawCharacter('hedgie', x + 192, y + 230, 1.8, PCOL[i]);
+      const c = C.CHARACTERS[aiChars[i]];
+      ctx.globalAlpha = 0.55;
+      drawCharacter(c.id, x + 192, y + 230, 1.9, PCOL[i]);
       ctx.globalAlpha = 1;
-      text('Press A to join', x + 192, y + 300, 32, '#f1f4f8', 'center');
-      text('or a Hedgie plays this seat', x + 192, y + 340, 22, '#9aa7bd', 'center', 500);
+      text(`${c.name.toUpperCase()} CPU`, x + 192, y + 282, 28, '#9aa7bd', 'center', 800);
+      text('Press A to take this seat', x + 192, y + 320, 24, '#f1f4f8', 'center');
+      text('a ready player uses ◀ ▶ to change the CPU', x + 192, y + 352, 16, '#7f8ba1', 'center', 500);
       continue;
     }
     const c = C.CHARACTERS[s.char];
@@ -1382,9 +1402,9 @@ function drawLobby() {
     text(`${money(c.money)} · turns ×${c.time}`, x + 192, y + 344, 18, '#9aa7bd', 'center', 500);
     if (s.ready) {
       ctx.fillStyle = PCOL[i];
-      rr(x + 100, y + 362, 185, 30, 15);
+      rr(x + 30, y + 362, 325, 30, 15);
       ctx.fill();
-      text('READY · B to change', x + 192, y + 377, 18, '#141821', 'center', 800);
+      text('READY ✓ · ◀ ▶ sets a CPU · B to change', x + 192, y + 377, 16, '#141821', 'center', 800);
     } else text(`${s.src === 'kbd' ? 'Keyboard' : `Controller ${s.pad + 1}`} · ◀ ▶ pick · A ready · B leave`, x + 192, y + 377, 17, '#9aa7bd', 'center', 500);
   }
   const canStart = allReady;
