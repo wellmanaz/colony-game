@@ -5,7 +5,7 @@ A four-player couch economic strategy game for the browser, played with game con
 ## Contents
 
 - `index.html` — landing page
-- `controller-test.html` — shows every connected controller and its button presses, to check how many controllers a browser supports
+- `pad/index.html` — shows every connected controller and its button presses, to check how many controllers a browser supports
 
 ## Run locally
 
