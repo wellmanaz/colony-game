@@ -907,43 +907,114 @@ function drawCharacter(id, x, y, scale, color, facing = 1, now = 0, moving = fal
     eye(-7, -62, 2);
     eye(7, -62, 2);
   } else if (id === 'degen') {
-    // Stained shirt, slouch, stubble, heavy eyes, energy drink in hand.
-    const slouch = moving ? Math.sin(t * 2) * 1.5 : 0;
-    ctx.translate(0, -bob * 0.6 + slouch);
-    limb(-8, -8, -8 - sw * 6, 0, 8, '#4a5468');
-    limb(8, -8, 8 + sw * 6, 0, 8, '#4a5468');
-    ctx.fillStyle = '#d9c64a';
-    rr(-26, -44, 52, 40, 12);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(120,90,20,0.5)';
+    // The basement gamer: enormous round body, a small head with a double
+    // chin, greasy strands of hair, a headset with a mic, acne, a stained
+    // shirt stretched over the gut, and a drink that never leaves his hand.
+    // He waddles, belly first.
+    const waddle = moving ? Math.sin(t) : 0;
+    const bounce = moving ? Math.abs(Math.sin(t)) * 2 : Math.sin(now / 900) * 1;
+    ctx.translate(0, -bounce);
+    ctx.rotate(waddle * 0.05);
+    // legs: short and wide apart
+    limb(-14, -14, -16 - waddle * 5, 0, 12, '#2d3340');
+    limb(14, -14, 16 + waddle * 5, 0, 12, '#2d3340');
+    ctx.fillStyle = '#1a1e28';
     ctx.beginPath();
-    ctx.arc(8, -26, 5, 0, 7);
-    ctx.arc(-10, -18, 3, 0, 7);
+    ctx.ellipse(-16 - waddle * 5, 1, 9, 4, 0, 0, 7);
+    ctx.ellipse(16 + waddle * 5, 1, 9, 4, 0, 0, 7);
     ctx.fill();
-    limb(-22, -38, -28 + sw * 6, -16, 8, '#e8c39e');
-    limb(22, -38, 30, -24, 8, '#e8c39e');
-    ctx.fillStyle = '#e03a3a';
-    rr(26, -38, 9, 16, 2);
+    // body: a big egg in a stained shirt
+    ctx.fillStyle = '#d9c64a';
+    ctx.beginPath();
+    ctx.ellipse(0, -36, 34, 34, 0, 0, 7);
     ctx.fill();
-    ctx.fillStyle = color;
-    rr(-26, -12, 52, 6, 3);
-    ctx.fill();
+    // belly hanging out under the shirt
     ctx.fillStyle = '#e8c39e';
     ctx.beginPath();
-    ctx.arc(0, -58, 18, 0, 7);
+    ctx.ellipse(0, -10, 26, 9, 0, 0, Math.PI);
     ctx.fill();
-    ctx.fillStyle = 'rgba(80,60,40,0.35)';
+    // stains and crumbs
+    ctx.fillStyle = 'rgba(120,80,20,0.5)';
     ctx.beginPath();
-    ctx.ellipse(0, -48, 13, 7, 0, 0, 7);
+    ctx.arc(10, -40, 6, 0, 7);
+    ctx.arc(-14, -26, 4, 0, 7);
+    ctx.arc(-4, -48, 3, 0, 7);
     ctx.fill();
-    ctx.fillStyle = '#6b4a2b';
-    [-10, -4, 3, 9].forEach((hx) => ctx.fillRect(hx, -78, 2, 6));
-    ctx.fillStyle = '#141821';
-    ctx.fillRect(-11, -60, 8, 3);
-    ctx.fillRect(3, -60, 8, 3);
-    ctx.fillStyle = 'rgba(90,40,60,0.4)';
-    ctx.fillRect(-11, -57, 8, 3);
-    ctx.fillRect(3, -57, 8, 3);
+    ctx.fillStyle = '#e8b04a';
+    ctx.fillRect(-10, -20, 3, 2);
+    ctx.fillRect(6, -24, 3, 2);
+    // arms: stubby, one holding the drink, one on an invisible mouse
+    limb(-30, -40, -40 - waddle * 3, -22, 10, '#e8c39e');
+    limb(30, -40, 36, -24, 10, '#e8c39e');
+    ctx.fillStyle = '#e03a3a';
+    rr(32, -40, 10, 18, 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(34, -36, 6, 2);
+    // player colour: a wristband on the drink hand
+    ctx.fillStyle = color;
+    rr(28, -24, 14, 6, 3);
+    ctx.fill();
+    // neck roll / double chin
+    ctx.fillStyle = '#e8c39e';
+    ctx.beginPath();
+    ctx.ellipse(0, -66, 15, 7, 0, 0, 7);
+    ctx.fill();
+    // head: small, on top
+    ctx.fillStyle = '#e8c39e';
+    ctx.beginPath();
+    ctx.ellipse(0, -80, 14, 13, 0, 0, 7);
+    ctx.fill();
+    // greasy strands of hair
+    ctx.strokeStyle = '#4a3418';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    [-10, -5, 0, 5, 10].forEach((hx, k) => {
+      ctx.beginPath();
+      ctx.moveTo(hx, -92);
+      ctx.lineTo(hx + (k - 2) * 3, -84 + (k % 2) * 6);
+      ctx.stroke();
+    });
+    // headset: band over the head, cups, boom mic
+    ctx.strokeStyle = '#222';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, -80, 15, Math.PI * 1.1, Math.PI * 1.9);
+    ctx.stroke();
+    ctx.fillStyle = '#222';
+    rr(-18, -84, 6, 10, 2);
+    ctx.fill();
+    rr(12, -84, 6, 10, 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(15, -76);
+    ctx.quadraticCurveTo(16, -66, 6, -68);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(5, -68, 2.5, 0, 7);
+    ctx.fill();
+    // face: half-closed eyes, acne, a slack mouth
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.ellipse(-5, -81, 4, 3, 0, 0, 7);
+    ctx.ellipse(5, -81, 4, 3, 0, 0, 7);
+    ctx.fill();
+    eye(-5, -80, 1.8);
+    eye(5, -80, 1.8);
+    ctx.fillStyle = '#e8c39e';
+    ctx.fillRect(-10, -86, 20, 4); // heavy lids
+    ctx.fillStyle = '#d9484a';
+    [[-9, -74], [8, -76], [-2, -72], [10, -70]].forEach(([ax, ay]) => {
+      ctx.beginPath();
+      ctx.arc(ax, ay, 1.4, 0, 7);
+      ctx.fill();
+    });
+    ctx.strokeStyle = '#7a4a3a';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(-5, -71);
+    ctx.lineTo(4, -71);
+    ctx.stroke();
   } else if (id === 'smooth') {
     // A pink brain that wobbles like jello, on two stubby legs.
     const wob = Math.sin(now / 110);
