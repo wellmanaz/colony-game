@@ -71,6 +71,7 @@ export class Music {
     this.nextTime = 0;
     this.timer = null;
     this.intensity = 1;
+    this.paused = false;
   }
 
   // Must be called from a user gesture the first time.
@@ -92,7 +93,7 @@ export class Music {
     this.playing = true;
     this.step = 0;
     this.nextTime = this.ctx.currentTime + 0.1;
-    this.timer = setInterval(() => this.schedule(), 40);
+    if (!this.paused) this.timer = setInterval(() => this.schedule(), 40);
   }
 
   toggleMute() {
@@ -104,6 +105,20 @@ export class Music {
   // Lower the band a little during screens that need concentration.
   setIntensity(v) {
     this.intensity = v;
+  }
+
+  // Pause the band (sound effects still play). Resumes where it left off.
+  setPaused(p) {
+    if (this.paused === p) return;
+    this.paused = p;
+    if (!this.ctx) return;
+    if (p) {
+      clearInterval(this.timer);
+      this.timer = null;
+    } else if (this.playing) {
+      this.nextTime = this.ctx.currentTime + 0.1;
+      this.timer = setInterval(() => this.schedule(), 40);
+    }
   }
 
   // Falling or rising slide used by the production chart.

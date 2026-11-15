@@ -1078,7 +1078,11 @@ function frame(now) {
   last = now;
   pollPads();
   if (keyboardInput().music || padIn.some((p) => p && p.music)) music.toggleMute();
-  if (game) music.setIntensity(game.phase === 'auction' || game.phase === 'production' || game.phase === 'summary' ? 0.6 : 1);
+  if (game) {
+    music.setIntensity(game.phase === 'production' || game.phase === 'summary' ? 0.6 : 1);
+    // Quiet on the trading floor and at land auctions so the bidding is audible.
+    music.setPaused(game.phase === 'auction' || game.phase === 'land');
+  } else music.setPaused(false);
 
   if (mode === 'lobby') {
     if (DEMO) {
