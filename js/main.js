@@ -666,22 +666,21 @@ function drawCharacter(id, x, y, scale, color, facing = 1, now = 0, moving = fal
   };
 
   if (id === 'ape') {
-    // A heavyset silverback knuckle-walking. Limbs are tapered shapes with
-    // bending elbows and knees; the gait layers a few slow waves so nothing
-    // moves like a metronome. Idle, it breathes and sways.
-    const fur = '#3b3f47';
-    const dark = '#282b32';
-    const silver = '#5e636d';
-    const skin = '#6f747d';
-    const g = moving ? t : now / 900; // gait phase, or a slow idle sway
-    const stride = moving ? 1 : 0;
-    const sway = Math.sin(g * 0.5 + 0.7) * (moving ? 1.5 : 1);
-    const breathe = 1 + Math.sin(now / 650) * 0.025;
-    const lurch = moving ? Math.abs(Math.sin(g)) * 3 : 0;
-    ctx.translate(sway, -lurch);
+    // A big cartoon gorilla: brown fur, tan muzzle and chest, a swept-up
+    // tuft, huge hands. It bounds along on all fours, both arms slamming
+    // down together, and thumps its chest now and then when idle.
+    const fur = '#6b3f23';
+    const dark = '#4a2a16';
+    const tan = '#e8b98a';
+    const g = moving ? t * 1.15 : 0;
+    const bound = moving ? Math.max(0, Math.sin(g)) : 0; // 0..1 airborne-ish
+    const land = moving ? Math.max(0, -Math.sin(g)) : 0; // crouch on landing
+    const idleT = now / 700;
+    const thump = !moving && Math.sin(idleT) > 0.75 ? Math.sin(now / 60) : 0; // chest beat burst
+    const breathe = 1 + Math.sin(idleT) * 0.03;
+    ctx.translate(0, -bound * 14 + land * 4);
 
-    // a tapered limb: shoulder/hip -> joint -> paw, drawn as two fat strokes
-    const arm = (sx, sy, jx, jy, px, py, w1, w2, col) => {
+    const limb = (sx, sy, jx, jy, px, py, w1, w2, col) => {
       ctx.strokeStyle = col;
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
@@ -695,106 +694,129 @@ function drawCharacter(id, x, y, scale, color, facing = 1, now = 0, moving = fal
       ctx.moveTo(jx, jy);
       ctx.lineTo(px, py);
       ctx.stroke();
+    };
+    const hand = (hx, hy, r, col) => {
       ctx.fillStyle = col;
       ctx.beginPath();
-      ctx.arc(px, py, w2 * 0.55, 0, 7);
+      ctx.arc(hx, hy, r, 0, 7);
       ctx.fill();
+      ctx.fillStyle = dark;
+      for (let k = -1; k <= 1; k++) {
+        ctx.beginPath();
+        ctx.arc(hx + k * r * 0.55, hy - r * 0.35, r * 0.22, 0, 7);
+        ctx.fill();
+      }
     };
-    // limb phases: diagonal pairs, with a little lag between arm and leg
-    const aF = Math.sin(g) * stride; // front arm
-    const aB = Math.sin(g + Math.PI) * stride; // back arm
-    const lF = Math.sin(g + Math.PI + 0.4) * stride; // front leg
-    const lB = Math.sin(g + 0.4) * stride; // back leg
-    const lift = (ph) => Math.max(0, Math.sin(ph)) * 4;
 
-    // far side: back leg, back arm
-    arm(-12, -22, -14 + lB * 5, -10, -12 + lB * 11, -lift(g + 0.4), 13, 11, dark);
-    arm(10, -50, 26 + aB * 6, -30 + Math.max(0, aB) * 4, 30 + aB * 12, -lift(g + Math.PI), 15, 13, dark);
+    // legs: short, tucked under, kicking back on the bound
+    const legSwing = moving ? Math.sin(g + Math.PI) * 10 : 0;
+    limb(-14, -18, -18 + legSwing * 0.4, -6, -16 + legSwing, 0 + bound * 6, 13, 11, dark);
+    limb(-4, -18, -6 + legSwing * 0.4, -6, -4 + legSwing, 0 + bound * 6, 13, 11, fur);
 
-    // torso: barrel chest, sloping back, silver saddle
+    // arms: both reach forward together and slam down
+    const reach = moving ? Math.cos(g) * 12 : 0;
+    const armY = moving ? -bound * 10 : thump * -6;
+    const farHand = [30 + reach, 0 + armY];
+    const nearHand = [36 + reach, 2 + armY];
+    if (!moving && thump) {
+      // chest thump: hands up on the chest
+      farHand[0] = 6;
+      farHand[1] = -44 + thump * 4;
+      nearHand[0] = 18;
+      nearHand[1] = -40 - thump * 4;
+    }
+    limb(8, -48, 24 + reach * 0.5, -30 + armY * 0.5, farHand[0], farHand[1], 15, 13, dark);
+
+    // torso: wide, round, tan chest patch
     ctx.save();
-    ctx.translate(0, -34);
+    ctx.translate(0, -36);
     ctx.scale(breathe, breathe);
     ctx.fillStyle = fur;
     ctx.beginPath();
-    ctx.moveTo(-26, 10);
-    ctx.bezierCurveTo(-34, -10, -20, -30, 4, -28);
-    ctx.bezierCurveTo(26, -28, 36, -16, 32, 4);
-    ctx.bezierCurveTo(28, 18, 4, 22, -10, 18);
-    ctx.bezierCurveTo(-20, 16, -26, 14, -26, 10);
-    ctx.closePath();
+    ctx.ellipse(2, 0, 30, 26, -0.15, 0, 7);
     ctx.fill();
-    ctx.fillStyle = silver;
     ctx.beginPath();
-    ctx.moveTo(-22, 6);
-    ctx.bezierCurveTo(-24, -4, -16, -14, -4, -14);
-    ctx.bezierCurveTo(-12, -4, -14, 6, -8, 14);
-    ctx.closePath();
+    ctx.ellipse(10, -14, 26, 16, -0.2, 0, 7);
     ctx.fill();
-    // chest muscle
-    ctx.fillStyle = skin;
+    ctx.fillStyle = tan;
     ctx.beginPath();
-    ctx.ellipse(10, 2, 13, 11, 0.2, 0, 7);
+    ctx.ellipse(12, 2, 16, 14, 0, 0, 7);
     ctx.fill();
-    ctx.strokeStyle = fur;
+    ctx.strokeStyle = '#c99a6e';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(10, -6);
-    ctx.lineTo(10, 10);
+    ctx.moveTo(12, -8);
+    ctx.lineTo(12, 10);
     ctx.stroke();
     ctx.restore();
 
-    // near side: front leg, front arm (thick, bulging)
-    arm(-4, -20, -2 + lF * 5, -9, 0 + lF * 11, -lift(g + Math.PI + 0.4), 14, 12, fur);
-    arm(16, -50, 32 + aF * 6, -28 + Math.max(0, aF) * 4, 36 + aF * 12, -lift(g), 17, 14, fur);
-    // bicep bulge on the front arm
-    ctx.fillStyle = fur;
-    ctx.beginPath();
-    ctx.ellipse(22 + aF * 3, -42, 11, 9, 0.6, 0, 7);
-    ctx.fill();
-    // wrist band in the player colour
+    limb(18, -46, 32 + reach * 0.5, -28 + armY * 0.5, nearHand[0], nearHand[1], 17, 15, fur);
+    hand(farHand[0], farHand[1], 9, dark);
+    hand(nearHand[0], nearHand[1], 10, fur);
+    // wristband in the player colour
     ctx.fillStyle = color;
     ctx.save();
-    ctx.translate(34 + aF * 10, -8 - lift(g) * 0.6);
-    ctx.rotate(0.4);
+    ctx.translate(nearHand[0] - 6, nearHand[1] - 10);
+    ctx.rotate(0.5);
     rr(-7, -4, 14, 8, 3);
     ctx.fill();
     ctx.restore();
 
-    // head: set low and forward, bobbing a beat behind the body
-    const hb = moving ? Math.sin(g - 0.6) * 1.5 : Math.sin(now / 1300) * 1;
+    // head: big, round, with a tan face, heavy brow and a tuft on top
+    const hb = moving ? -bound * 3 : Math.sin(idleT * 1.3) * 1.2;
     ctx.save();
-    ctx.translate(24, -62 + hb);
+    ctx.translate(24, -66 + hb);
     ctx.fillStyle = fur;
     ctx.beginPath();
-    ctx.ellipse(0, 0, 17, 15, 0, 0, 7);
+    ctx.arc(0, 0, 19, 0, 7);
     ctx.fill();
+    // ears
     ctx.beginPath();
-    ctx.ellipse(-2, -12, 12, 7, 0, 0, 7); // sagittal crest
+    ctx.arc(-17, -2, 6, 0, 7);
     ctx.fill();
-    ctx.fillStyle = skin;
+    ctx.fillStyle = tan;
     ctx.beginPath();
-    ctx.ellipse(5, 4, 11, 10, 0, 0, 7);
+    ctx.arc(-17, -2, 3, 0, 7);
     ctx.fill();
-    ctx.fillStyle = dark;
+    // tuft
+    ctx.fillStyle = fur;
     ctx.beginPath();
-    ctx.moveTo(-6, -6);
-    ctx.lineTo(14, -6);
-    ctx.lineTo(13, -2);
-    ctx.lineTo(-5, -2);
+    ctx.moveTo(-6, -16);
+    ctx.quadraticCurveTo(0, -34, 12, -24);
+    ctx.quadraticCurveTo(6, -22, 8, -16);
     ctx.closePath();
-    ctx.fill(); // brow ridge
-    eye(1, -0.5, 2.2);
-    eye(9, -0.5, 2.2);
+    ctx.fill();
+    // face
+    ctx.fillStyle = tan;
+    ctx.beginPath();
+    ctx.ellipse(4, 5, 15, 12, 0, 0, 7);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(2, -4, 12, 7, 0, 0, 7);
+    ctx.fill();
+    // brow
+    ctx.fillStyle = fur;
+    ctx.beginPath();
+    ctx.ellipse(2, -9, 14, 4, 0, 0, 7);
+    ctx.fill();
+    // eyes: big, friendly
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.ellipse(-3, -3, 4.5, 5, 0, 0, 7);
+    ctx.ellipse(8, -3, 4.5, 5, 0, 0, 7);
+    ctx.fill();
+    eye(-2, -2, 2.4);
+    eye(9, -2, 2.4);
+    // nostrils and a grin
     ctx.fillStyle = dark;
     ctx.beginPath();
-    ctx.arc(4, 8, 1.6, 0, 7);
-    ctx.arc(9, 8, 1.6, 0, 7);
+    ctx.arc(2, 6, 1.8, 0, 7);
+    ctx.arc(8, 6, 1.8, 0, 7);
     ctx.fill();
     ctx.strokeStyle = dark;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(6, 11, 5, 0.3, Math.PI - 0.3);
+    ctx.arc(5, 8, 8, 0.25, Math.PI - 0.25);
     ctx.stroke();
     ctx.restore();
   } else if (id === 'hedgie') {
