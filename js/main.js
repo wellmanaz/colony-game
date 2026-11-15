@@ -10,6 +10,7 @@ const PCOL = ['#ff6b6b', '#4d9dff', '#ffd84d', '#6be3a2'];
 const PARAMS = new URLSearchParams(location.search);
 const DEMO = PARAMS.has('demo'); // AI-only game that starts by itself
 const SKIP = Number(PARAMS.get('skip')) || 0; // demo only: seconds to fast-forward at start
+const ROUNDS_OPT = Number(PARAMS.get('rounds')) || 0;
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -110,7 +111,7 @@ function startGame() {
     s ? { kind: 'human', name: `Ape ${++apes}` } : { kind: 'ai', name: `Hedgie ${++hedgies}` }
   );
   ais = seats.map(() => makeAI());
-  game = C.newGame(defs);
+  game = C.newGame(defs, Math.random, { rounds: ROUNDS_OPT || undefined });
   mode = 'game';
   overTimer = 0;
 }
@@ -142,6 +143,10 @@ function text(str, x, y, size, color, align = 'left', weight = 700) {
   ctx.fillText(str, x, y);
 }
 
+function money(n) {
+  return `$${Math.round(n).toLocaleString('en-US')}`;
+}
+
 const stars = [];
 for (let i = 0; i < 160; i++) stars.push([Math.random() * W, Math.random() * H, Math.random() * 1.8 + 0.4]);
 
@@ -157,7 +162,7 @@ function drawBackground() {
 }
 
 function drawBot(x, y, outfit, scale = 1) {
-  const o = C.OUTFITS[outfit];
+  const o = outfit >= 0 ? C.OUTFITS[outfit] : null;
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(scale, scale);
@@ -167,7 +172,7 @@ function drawBot(x, y, outfit, scale = 1) {
   ctx.moveTo(0, -26);
   ctx.lineTo(0, -38);
   ctx.stroke();
-  ctx.fillStyle = o.color;
+  ctx.fillStyle = o ? o.color : '#8f99a8';
   ctx.beginPath();
   ctx.arc(0, -40, 5, 0, 7);
   ctx.fill();
@@ -180,24 +185,31 @@ function drawBot(x, y, outfit, scale = 1) {
   ctx.fillStyle = '#7ef0ff';
   ctx.fillRect(-11, -16, 6, 5);
   ctx.fillRect(5, -16, 6, 5);
-  ctx.fillStyle = o.color;
-  ctx.beginPath();
-  ctx.arc(0, 6, 11, 0, 7);
-  ctx.fill();
-  text(o.letter, 0, 7, 16, '#141821', 'center', 800);
+  if (o) {
+    ctx.fillStyle = o.color;
+    ctx.beginPath();
+    ctx.arc(0, 6, 11, 0, 7);
+    ctx.fill();
+    text(o.letter, 0, 7, 16, '#141821', 'center', 800);
+  } else {
+    ctx.strokeStyle = '#8f99a8';
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.arc(0, 6, 11, 0, 7);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
   ctx.restore();
 }
 
 function drawWalker(x, y, color, isAI, facing) {
   ctx.save();
   ctx.translate(x, y);
-  // shadow
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.beginPath();
   ctx.ellipse(0, 34, 26, 8, 0, 0, 7);
   ctx.fill();
   if (isAI) {
-    // Hedgie: grey suit, tie in the seat colour
     ctx.fillStyle = '#3a4152';
     rr(-22, -4, 44, 38, 10);
     ctx.fill();
@@ -224,7 +236,6 @@ function drawWalker(x, y, color, isAI, facing) {
     ctx.arc(0, -26, 18, Math.PI, 0);
     ctx.fill();
   } else {
-    // Ape: body in the seat colour
     ctx.fillStyle = color;
     rr(-22, -4, 44, 38, 14);
     ctx.fill();
@@ -249,7 +260,47 @@ function drawWalker(x, y, color, isAI, facing) {
   ctx.restore();
 }
 
-function drawTile(t) {
+function drawWhale(x, y, now) {
+  const bob = Math.sin(now / 160) * 5;
+  ctx.save();
+  ctx.translate(x, y + bob);
+  ctx.fillStyle = '#5aa9ff';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 44, 22, 0, 0, 7);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(38, -4);
+  ctx.lineTo(62, -22);
+  ctx.lineTo(58, 2);
+  ctx.lineTo(62, 22);
+  ctx.lineTo(38, 6);
+  ctx.fill();
+  ctx.fillStyle = '#dff1ff';
+  ctx.beginPath();
+  ctx.ellipse(-4, 8, 30, 10, 0, 0, 7);
+  ctx.fill();
+  ctx.fillStyle = '#141821';
+  ctx.beginPath();
+  ctx.arc(-24, -6, 3, 0, 7);
+  ctx.fill();
+  text('$', -2, -36, 26, '#ffd84d', 'center', 800);
+  ctx.restore();
+}
+
+function drawGem(x, y, size, color) {
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x, y - size);
+  ctx.lineTo(x + size * 0.8, y - size * 0.3);
+  ctx.lineTo(x, y + size);
+  ctx.lineTo(x - size * 0.8, y - size * 0.3);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ---------- map ----------
+
+function drawTile(t, now) {
   if (t.exchange) return;
   const x = C.MAP_X + t.c * C.TILE_W + 3;
   const y = C.MAP_Y + t.r * C.TILE_H + 3;
@@ -304,6 +355,10 @@ function drawTile(t) {
   }
   ctx.restore();
 
+  if (t.assayed) {
+    for (let k = 0; k < 3; k++) drawGem(x + w - 18 - k * 20, y + 16, 8, k < t.dia ? '#c9a4ff' : 'rgba(0,0,0,0.35)');
+  }
+
   if (t.owner >= 0) {
     ctx.strokeStyle = PCOL[t.owner];
     ctx.lineWidth = 7;
@@ -315,11 +370,7 @@ function drawTile(t) {
     ctx.lineTo(x + 40, y + 4);
     ctx.lineTo(x + 4, y + 40);
     ctx.fill();
-  }
-  if (t.owner >= 0) {
-    // the pad a bot has to be installed on
     const mine = game.phase === 'walk' && game.turn.seat === t.owner;
-    ctx.strokeStyle = PCOL[t.owner];
     ctx.globalAlpha = mine ? 1 : 0.45;
     ctx.lineWidth = 4;
     ctx.setLineDash([7, 6]);
@@ -330,6 +381,7 @@ function drawTile(t) {
     ctx.globalAlpha = 1;
   }
   if (t.bot >= 0) drawBot(x + w / 2, y + h / 2 + 12, t.bot, 1.05);
+  if (game.whale && game.whale.tile === C.tileIndex(t.c, t.r) && Math.floor(now / 180) % 3 !== 0) drawWhale(x + w / 2, y + h / 2, now);
 }
 
 function drawExchange() {
@@ -344,68 +396,384 @@ function drawExchange() {
   ctx.lineWidth = 5;
   ctx.stroke();
   text('THE EXCHANGE', x + w / 2, y + 44, 34, '#3ddc84', 'center', 800);
-  // a chart line that only goes up
+  text('walk in for bots, tools, assays and the bar', x + w / 2, y + 80, 20, '#7f8ba1', 'center', 500);
   ctx.strokeStyle = '#3ddc84';
   ctx.lineWidth = 6;
   ctx.lineJoin = 'round';
   ctx.beginPath();
-  const pts = [
-    [0.1, 0.82],
-    [0.25, 0.66],
-    [0.36, 0.74],
-    [0.52, 0.5],
-    [0.64, 0.58],
-    [0.88, 0.3],
-  ];
-  pts.forEach(([fx, fy], i) => (i ? ctx.lineTo(x + w * fx, y + h * fy) : ctx.moveTo(x + w * fx, y + h * fy)));
+  [
+    [0.1, 0.86],
+    [0.25, 0.7],
+    [0.36, 0.78],
+    [0.52, 0.56],
+    [0.64, 0.64],
+    [0.88, 0.4],
+  ].forEach(([fx, fy], i) => (i ? ctx.lineTo(x + w * fx, y + h * fy) : ctx.moveTo(x + w * fx, y + h * fy)));
   ctx.stroke();
   ctx.fillStyle = '#3ddc84';
   ctx.beginPath();
-  ctx.moveTo(x + w * 0.93, y + h * 0.24);
-  ctx.lineTo(x + w * 0.82, y + h * 0.28);
-  ctx.lineTo(x + w * 0.9, y + h * 0.38);
+  ctx.moveTo(x + w * 0.93, y + h * 0.34);
+  ctx.lineTo(x + w * 0.82, y + h * 0.38);
+  ctx.lineTo(x + w * 0.9, y + h * 0.48);
   ctx.fill();
 }
+
+function drawMap(now) {
+  game.tiles.forEach((t) => drawTile(t, now));
+  drawExchange();
+  if (game.flash) {
+    const t = game.tiles[game.flash.tile];
+    ctx.fillStyle = `rgba(255,255,255,${Math.max(0, game.flash.t)})`;
+    rr(C.MAP_X + t.c * C.TILE_W + 3, C.MAP_Y + t.r * C.TILE_H + 3, C.TILE_W - 6, C.TILE_H - 6, 10);
+    ctx.fill();
+  }
+}
+
+// ---------- town ----------
+
+function drawTown(now) {
+  const tu = game.turn;
+  const p = game.players[tu.seat];
+  ctx.fillStyle = '#141a27';
+  ctx.fillRect(0, C.TOWN.floorTop - 50, W, C.TOWN.floorBottom - C.TOWN.floorTop + 100);
+  ctx.strokeStyle = '#1f2838';
+  ctx.lineWidth = 2;
+  for (let x = 0; x < W; x += 80) {
+    ctx.beginPath();
+    ctx.moveTo(x, C.TOWN.floorTop - 50);
+    ctx.lineTo(x, C.TOWN.floorBottom + 50);
+    ctx.stroke();
+  }
+  for (let y = C.TOWN.floorTop - 50; y < C.TOWN.floorBottom + 50; y += 80) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(W, y);
+    ctx.stroke();
+  }
+  [
+    [C.TOWN.exitLeft - 40, '◀ OUT'],
+    [C.TOWN.exitRight + 40, 'OUT ▶'],
+  ].forEach(([x, label]) => {
+    ctx.fillStyle = '#0a0c13';
+    ctx.fillRect(x - 40, C.TOWN.floorTop, 80, C.TOWN.floorBottom - C.TOWN.floorTop);
+    text(label, x, 540, 26, '#7f8ba1', 'center', 800);
+  });
+
+  const price = C.botPrice(game);
+  C.TOWN.buildings.forEach((b) => {
+    const o = b.outfit !== undefined ? C.OUTFITS[b.outfit] : null;
+    const col = o ? o.color : b.id === 'lot' ? '#cfd6e0' : b.id === 'pub' ? '#ff8ad8' : '#c9a4ff';
+    ctx.fillStyle = '#1d2638';
+    rr(b.x, b.y, b.w, b.h, 16);
+    ctx.fill();
+    ctx.strokeStyle = col;
+    ctx.lineWidth = 5;
+    ctx.stroke();
+    ctx.fillStyle = col;
+    rr(b.x, b.y, b.w, 56, 16);
+    ctx.fill();
+    ctx.fillRect(b.x, b.y + 30, b.w, 26);
+    text(b.name.toUpperCase(), b.x + b.w / 2, b.y + 29, 28, '#0a0c13', 'center', 800);
+    let l1 = '';
+    let l2 = '';
+    if (b.id === 'lot') {
+      l1 = price === null ? 'SOLD OUT' : `Bot: ${money(price)}`;
+      l2 = `${game.store.bots} in stock · return a bot here for a refund`;
+      drawBot(b.x + b.w / 2, b.y + 150, -1, 1.1);
+    } else if (o) {
+      l1 = `${o.tool}: ${money(o.cost)}`;
+      l2 = `makes ${o.name}`;
+      drawBot(b.x + b.w / 2, b.y + 150, b.outfit, 1.1);
+    } else if (b.id === 'assay') {
+      l1 = 'Check a plot for diamonds';
+      l2 = 'walk in, fetch a sample, walk back';
+      drawGem(b.x + b.w / 2, b.y + 140, 30, '#c9a4ff');
+    } else if (b.id === 'pub') {
+      const base = 50 + (game.round - 1) * 18;
+      l1 = 'YOLO the rest of your turn';
+      l2 = `pays up to ${money(base)} — more the sooner you quit`;
+      text('🍺', b.x + b.w / 2, b.y + 140, 60, '#fff', 'center');
+    }
+    text(l1, b.x + b.w / 2, b.y + 80, 24, '#f1f4f8', 'center');
+    text(l2, b.x + b.w / 2, b.y + b.h - 22, 17, '#9aa7bd', 'center', 500);
+  });
+
+  if (tu.hasBot) drawBot(tu.bx, tu.by, tu.outfit, 0.9);
+  drawWalker(tu.x, tu.y, PCOL[tu.seat], p.kind === 'ai', tu.facing);
+  if (tu.assay === 'have-sample') text('🧪', tu.x + 34, tu.y - 40, 30, '#fff', 'center');
+}
+
+// ---------- HUD ----------
 
 function drawPanels() {
   game.players.forEach((p, i) => {
     const x = 80 + i * 445;
-    const y = 968;
-    const active = game.phase === 'walk' && game.turn.seat === i;
+    const y = 962;
+    const active = (game.phase === 'walk' && game.turn.seat === i) || (game.phase === 'claim' && !p.claimed);
     ctx.fillStyle = active ? '#263049' : '#161b28';
-    rr(x, y, 425, 96, 12);
+    rr(x, y, 425, 104, 12);
     ctx.fill();
-    if (active) {
+    if (game.phase === 'walk' && game.turn.seat === i) {
       ctx.strokeStyle = PCOL[i];
       ctx.lineWidth = 4;
       ctx.stroke();
     }
     ctx.fillStyle = PCOL[i];
-    rr(x, y, 16, 96, 8);
+    rr(x, y, 16, 104, 8);
     ctx.fill();
-    text(p.name, x + 36, y + 32, 32, '#f1f4f8');
-    let status = `${C.countPlots(game, i)} plots · ${C.countBots(game, i)} bots`;
-    if (game.phase === 'claim') status += p.claimed ? ' · claimed' : '';
-    text(status, x + 36, y + 70, 24, '#9aa7bd', 'left', 500);
+    text(p.name, x + 36, y + 24, 28, '#f1f4f8');
+    text(money(p.money), x + 410, y + 24, 28, '#3ddc84', 'right', 800);
+    text(`${C.countPlots(game, i)} plots · ${C.countBots(game, i)} bots`, x + 36, y + 52, 18, '#9aa7bd', 'left', 500);
+    let gx = x + 36;
+    C.OUTFITS.forEach((o) => {
+      ctx.fillStyle = o.color;
+      ctx.beginPath();
+      ctx.arc(gx + 10, y + 82, 10, 0, 7);
+      ctx.fill();
+      text(o.letter, gx + 10, y + 83, 13, '#141821', 'center', 800);
+      text(String(p.goods[o.id]), gx + 28, y + 82, 22, '#dfe6f1', 'left', 600);
+      gx += 94;
+    });
   });
 }
 
+function drawTopBar(hint, hintColor = '#c8d2e3') {
+  text('TENDIE TOWN', 80, 52, 40, '#3ddc84', 'left', 800);
+  text(`Round ${game.round}/${game.rounds}`, 380, 52, 28, '#9aa7bd', 'left', 600);
+  text(hint, 1840, 52, 26, hintColor, 'right', 500);
+}
+
+function drawTimer(tu) {
+  const frac = Math.max(0, tu.t / tu.length);
+  ctx.fillStyle = '#1d2638';
+  rr(80, 78, 1760, 14, 7);
+  ctx.fill();
+  ctx.fillStyle = frac < 0.2 ? '#ff6b6b' : PCOL[tu.seat];
+  rr(80, 78, 1760 * frac, 14, 7);
+  ctx.fill();
+}
+
+function drawToasts() {
+  game.toasts.forEach((t, i) => {
+    const y = 905 - i * 58;
+    ctx.fillStyle = 'rgba(8,10,16,0.88)';
+    rr(W / 2 - 600, y - 24, 1200, 50, 25);
+    ctx.fill();
+    text(t.text, W / 2, y + 1, 26, '#ffd84d', 'center', 700);
+  });
+}
+
+// ---------- auction ----------
+
+function drawAuction() {
+  const a = game.auction;
+  const o = C.OUTFITS[a.gi];
+  const st = game.store;
+  drawTopBar(`Trading floor ${a.gi + 1} of 4`);
+  text(`${o.name.toUpperCase()} AUCTION`, W / 2, 150, 64, o.color, 'center', 800);
+
+  const storeBuys = st.stock[a.good] < C.STORE_CAP[a.good];
+  const sells = a.good !== 'diamonds' && st.stock[a.good] > 0;
+  const stockText = a.good === 'diamonds' ? 'has buyers offworld' : `has ${st.stock[a.good]} in stock`;
+  const sellText = sells ? `sells at ${money(st.sell[a.good])}` : 'nothing to sell';
+  const buyText = storeBuys ? `buys at ${money(st.buy[a.good])}` : 'is full, not buying';
+  text(`The Exchange ${stockText} · ${sellText} · ${buyText}`, W / 2, 205, 26, '#c8d2e3', 'center', 500);
+
+  if (a.stage === 'declare') {
+    text(`Buying or selling? ${Math.ceil(a.t)}`, W / 2, 300, 48, '#fff', 'center', 800);
+    text('Stick UP to buy · stick DOWN to sell · B to sit out', W / 2, 355, 28, '#9aa7bd', 'center', 500);
+    game.players.forEach((p, i) => {
+      const x = 240 + i * 480;
+      const role = a.roles[i];
+      ctx.fillStyle = '#161b28';
+      rr(x - 180, 420, 360, 300, 16);
+      ctx.fill();
+      ctx.strokeStyle = PCOL[i];
+      ctx.lineWidth = role === 'none' ? 3 : 7;
+      ctx.stroke();
+      drawWalker(x, 520, PCOL[i], p.kind === 'ai', 1);
+      text(p.name, x, 600, 30, '#f1f4f8', 'center');
+      const label = role === 'buy' ? 'BUYING' : role === 'sell' ? 'SELLING' : 'sitting out';
+      text(label, x, 650, 34, role === 'buy' ? '#6be3a2' : role === 'sell' ? '#ff8ad8' : '#7f8ba1', 'center', 800);
+      text(`has ${p.goods[a.good]} · ${money(p.money)}`, x, 695, 22, '#9aa7bd', 'center', 500);
+    });
+    return;
+  }
+
+  const top = 260;
+  const bottom = 860;
+  const yOf = (price) => bottom - (price / a.axisMax) * (bottom - top);
+  ctx.fillStyle = '#10151f';
+  rr(300, top - 20, 1320, bottom - top + 40, 16);
+  ctx.fill();
+  ctx.strokeStyle = '#2a3447';
+  ctx.lineWidth = 2;
+  for (let p = 0; p <= a.axisMax; p += a.axisMax / 6) {
+    const y = yOf(p);
+    ctx.beginPath();
+    ctx.moveTo(300, y);
+    ctx.lineTo(1620, y);
+    ctx.stroke();
+    text(money(p), 285, y, 20, '#7f8ba1', 'right', 500);
+  }
+  const line = (price, color, label) => {
+    const y = yOf(price);
+    ctx.strokeStyle = color;
+    ctx.setLineDash([10, 8]);
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(300, y);
+    ctx.lineTo(1620, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    text(label, 1630, y, 20, color, 'left', 600);
+  };
+  if (sells) line(st.sell[a.good], '#3ddc84', `Exchange sells ${money(st.sell[a.good])}`);
+  if (storeBuys) line(st.buy[a.good], '#ff8ad8', `Exchange buys ${money(st.buy[a.good])}`);
+  text('BUYERS ▲', 520, top - 40, 24, '#6be3a2', 'center', 800);
+  text('SELLERS ▼', 1400, top - 40, 24, '#ff8ad8', 'center', 800);
+
+  let bi = 0;
+  let si = 0;
+  game.players.forEach((p, i) => {
+    if (a.roles[i] === 'none') return;
+    const buyer = a.roles[i] === 'buy';
+    const x = buyer ? 400 + bi++ * 120 : 1280 + si++ * 120;
+    const y = yOf(a.price[i]);
+    ctx.globalAlpha = a.active[i] ? 1 : 0.35;
+    ctx.fillStyle = PCOL[i];
+    ctx.fillRect(x - 40, y - 3, 80, 6);
+    drawWalker(x, y - 30, PCOL[i], p.kind === 'ai', 1);
+    text(money(a.price[i]), x, y + 22, 22, '#fff', 'center', 800);
+    text(a.active[i] ? p.name : `${p.name} (done)`, x, y + 46, 16, '#c8d2e3', 'center', 500);
+    const n = buyer ? a.bought[i] : a.sold[i];
+    if (n) text(buyer ? `+${n}` : `−${n}`, x, y - 78, 22, buyer ? '#6be3a2' : '#ff8ad8', 'center', 800);
+    ctx.globalAlpha = 1;
+  });
+
+  let label;
+  if (a.stage === 'trade') label = `${Math.ceil(a.t)}s · ${a.trades} traded`;
+  else if (a.trades) label = `${a.trades} traded, average ${money(a.sum / a.trades)}`;
+  else label = 'No trades';
+  text(label, W / 2, 900, 30, '#fff', 'center', 800);
+  if (a.stage === 'trade') text('Buyers push UP to bid more · sellers push DOWN to ask less · deals happen when they meet · B to stop', W / 2, 935, 20, '#9aa7bd', 'center', 500);
+}
+
+// ---------- report, summary, result ----------
+
+function drawReport() {
+  const r = game.report;
+  drawTopBar('Production');
+  text('PRODUCTION REPORT', W / 2, 150, 60, '#3ddc84', 'center', 800);
+  let y = 230;
+  if (r.event) {
+    ctx.fillStyle = 'rgba(255,107,107,0.15)';
+    rr(160, y - 34, 1600, 68, 16);
+    ctx.fill();
+    text(r.event.text, W / 2, y, 30, '#ff6b6b', 'center', 800);
+    y += 70;
+  }
+  r.notes.forEach((n) => {
+    text(n, W / 2, y, 24, '#ffd84d', 'center', 600);
+    y += 36;
+  });
+  y += 20;
+  const cols = [420, 760, 1000, 1240, 1480];
+  C.OUTFITS.forEach((o, k) => text(o.name, cols[k + 1], y, 26, o.color, 'center', 800));
+  y += 50;
+  r.rows.forEach((row) => {
+    const p = game.players[row.seat];
+    ctx.fillStyle = '#161b28';
+    rr(200, y - 32, 1520, 64, 12);
+    ctx.fill();
+    text(p.name, cols[0] - 180, y, 30, PCOL[row.seat], 'left', 800);
+    C.OUTFITS.forEach((o, k) => text(row.gained[o.id] ? `+${row.gained[o.id]}` : '—', cols[k + 1], y, 30, row.gained[o.id] ? '#f1f4f8' : '#4a5468', 'center', 700));
+    const note = [];
+    if (row.dark) note.push(`${row.dark} bot${row.dark > 1 ? 's' : ''} idle, no fuel`);
+    if (row.bears) note.push('bears ate a plot');
+    text(note.join(' · '), 1700, y, 20, '#ff6b6b', 'right', 500);
+    y += 76;
+  });
+  text(`Each turn you eat ${C.foodNeed(game.round + 1)} tendies and every non-fuel bot burns 1 fuel · A to continue (${Math.ceil(r.t)})`, W / 2, 920, 22, '#9aa7bd', 'center', 500);
+}
+
+function drawSummary() {
+  const sm = game.summary;
+  drawTopBar('End of round');
+  text(`ROUND ${game.round} STANDINGS`, W / 2, 150, 60, '#3ddc84', 'center', 800);
+  text(`Colony worth ${money(sm.colony)} · needs ${money(60000)} by round ${game.rounds} to count as a success`, W / 2, 215, 26, sm.colony >= 60000 ? '#6be3a2' : '#c8d2e3', 'center', 500);
+  let y = 300;
+  sm.rows.forEach((row, k) => {
+    const p = game.players[row.seat];
+    ctx.fillStyle = '#161b28';
+    rr(200, y - 36, 1520, 72, 12);
+    ctx.fill();
+    text(`${k + 1}.`, 240, y, 32, '#7f8ba1', 'left', 800);
+    text(p.name, 300, y, 32, PCOL[row.seat], 'left', 800);
+    text(money(row.worth), 760, y, 32, '#f1f4f8', 'right', 800);
+    text(`${money(p.money)} cash · ${C.countPlots(game, row.seat)} plots · ${C.countBots(game, row.seat)} bots`, 800, y, 22, '#9aa7bd', 'left', 500);
+    const sp = row.spoiled;
+    const rot = [];
+    if (sp.tendies) rot.push(`${sp.tendies} tendies went stale`);
+    if (sp.fuel) rot.push(`${sp.fuel} fuel leaked`);
+    if (sp.chips) rot.push(`${sp.chips} chips over the cap`);
+    text(rot.join(' · '), 1690, y, 20, '#ff8ad8', 'right', 500);
+    y += 88;
+  });
+  text(`The Exchange built ${sm.botsBuilt} bot${sm.botsBuilt === 1 ? '' : 's'} from chips · Bot Lot now has ${game.store.bots}`, W / 2, 700, 24, '#c8d2e3', 'center', 500);
+  text('Poorest player goes first next round', W / 2, 740, 22, '#9aa7bd', 'center', 500);
+  text(`A to continue (${Math.ceil(sm.t)})`, W / 2, 920, 22, '#9aa7bd', 'center', 500);
+}
+
+function drawResult() {
+  const r = game.result;
+  ctx.fillStyle = 'rgba(8,10,16,0.9)';
+  ctx.fillRect(0, 0, W, H);
+  text('GAME OVER', W / 2, 150, 72, '#3ddc84', 'center', 800);
+  text(`Colony worth ${money(r.colony)}`, W / 2, 230, 36, '#f1f4f8', 'center', 700);
+  text(r.ending, W / 2, 285, 30, r.success ? '#6be3a2' : '#ff6b6b', 'center', 600);
+  r.rows.forEach((row, k) => {
+    const p = game.players[row.seat];
+    const y = 400 + k * 80;
+    text(k === 0 ? '👑' : `${k + 1}.`, 560, y, 40, '#fff', 'center');
+    text(p.name, 620, y, 40, PCOL[row.seat], 'left', 800);
+    text(money(row.worth), 1360, y, 40, '#f1f4f8', 'right', 800);
+    if (k === r.rows.length - 1) text('Bagholder', 1400, y, 24, '#ff8ad8', 'left', 600);
+  });
+  text('Press A to go back to the start screen', W / 2, 820, 30, '#c8d2e3', 'center', 500);
+}
+
+// ---------- game screen ----------
+
 function drawGame(now) {
   drawBackground();
-  text('TENDIE TOWN', 80, 58, 44, '#3ddc84', 'left', 800);
-  game.tiles.forEach(drawTile);
-  drawExchange();
-
-  if (game.flash) {
-    const t = game.tiles[game.flash.tile];
-    ctx.fillStyle = `rgba(255,255,255,${game.flash.t})`;
-    rr(C.MAP_X + t.c * C.TILE_W + 3, C.MAP_Y + t.r * C.TILE_H + 3, C.TILE_W - 6, C.TILE_H - 6, 10);
-    ctx.fill();
+  if (game.phase === 'auction') {
+    drawAuction();
+    drawPanels();
+    drawToasts();
+    return;
+  }
+  if (game.phase === 'production') {
+    drawReport();
+    drawPanels();
+    return;
+  }
+  if (game.phase === 'summary') {
+    drawSummary();
+    drawPanels();
+    return;
+  }
+  if (game.phase === 'over') {
+    drawMap(now);
+    drawPanels();
+    drawResult();
+    return;
   }
 
   if (game.phase === 'claim') {
-    text(`Round ${game.round} of ${C.ROUNDS} · Land grab — press A when the scanner is on the plot you want`, 1840, 58, 28, '#c8d2e3', 'right', 500);
-    if (!game.banner) {
+    drawTopBar('Land grab — press A when the scanner is on the plot you want');
+    drawMap(now);
+    if (!game.banner && game.claim.pos < game.claim.order.length) {
       const t = game.tiles[game.claim.order[game.claim.pos]];
       const pulse = 0.6 + 0.4 * Math.sin(now / 70);
       ctx.strokeStyle = `rgba(255,255,255,${pulse})`;
@@ -416,76 +784,70 @@ function drawGame(now) {
   } else if (game.phase === 'walk') {
     const tu = game.turn;
     const p = game.players[tu.seat];
-    const o = C.OUTFITS[tu.outfit];
     let hint;
-    if (p.kind === 'ai') hint = `${p.name} is working`;
-    else if (tu.hasBot) hint = `X: change tool (${o.tool} → ${o.name}) · A: install — stand on your plot's pad or the bot bolts · B: end turn`;
-    else hint = 'Walk back to The Exchange for another bot · B: end turn';
-    text(hint, 1700, 58, 28, '#c8d2e3', 'right', 500);
-    text(String(Math.max(0, Math.ceil(tu.t))), 1840, 58, 48, tu.t < 5 ? '#ff6b6b' : '#f1f4f8', 'right', 800);
-    if (tu.hasBot) drawBot(tu.bx, tu.by, tu.outfit, 0.9);
-    drawWalker(tu.x, tu.y, PCOL[tu.seat], p.kind === 'ai', tu.facing);
+    if (p.kind === 'ai') hint = 'working';
+    else if (tu.scene === 'town') hint = tu.hasBot ? 'Walk into a shop to fit a tool, then leave town through an exit · B ends turn' : 'Walk into a building · B ends turn';
+    else if (tu.hasBot) hint = tu.outfit >= 0 ? "A on your plot's pad installs the bot — miss and it bolts · B ends turn" : 'This bot needs a tool: go back to town';
+    else if (tu.assay === 'need-sample') hint = 'Stand on a plot and press A to take a sample';
+    else if (tu.assay === 'have-sample') hint = 'Take the sample back to the Assay Office';
+    else hint = 'Walk into The Exchange for a bot · A on the Whale catches it · B ends turn';
+    drawTopBar(`${p.name}: ${hint}`);
+    drawTimer(tu);
+    if (tu.scene === 'town') drawTown(now);
+    else {
+      drawMap(now);
+      if (tu.hasBot) drawBot(tu.bx, tu.by, tu.outfit, 0.9);
+      drawWalker(tu.x, tu.y, PCOL[tu.seat], p.kind === 'ai', tu.facing);
+      if (tu.assay === 'have-sample') text('🧪', tu.x + 34, tu.y - 40, 30, '#fff', 'center');
+      game.runaways.forEach((r) => {
+        const wob = Math.sin(now / 45) * 9;
+        drawBot(r.x + wob, r.y, r.outfit, 0.9);
+        text('!', r.x + wob + 30, r.y - 44, 40, '#ff6b6b', 'center', 800);
+      });
+    }
   }
-
-  game.runaways.forEach((r) => {
-    const wob = Math.sin(now / 45) * 9;
-    drawBot(r.x + wob, r.y, r.outfit, 0.9);
-    text('!', r.x + wob + 30, r.y - 44, 40, '#ff6b6b', 'center', 800);
-  });
 
   drawPanels();
-
-  if (game.toast) {
-    ctx.fillStyle = 'rgba(8,10,16,0.85)';
-    rr(W / 2 - 520, 866, 1040, 70, 35);
-    ctx.fill();
-    text(game.toast.text, W / 2, 902, 36, '#ffd84d', 'center', 800);
-  }
+  drawToasts();
 
   if (game.banner) {
     ctx.fillStyle = 'rgba(8,10,16,0.82)';
     ctx.fillRect(0, 440, W, 170);
-    text(game.banner.text, W / 2, 525, 72, '#ffffff', 'center', 800);
-  }
-
-  if (game.phase === 'over') {
-    ctx.fillStyle = 'rgba(8,10,16,0.88)';
-    ctx.fillRect(0, 300, W, 480);
-    text('Prototype ends here', W / 2, 380, 72, '#3ddc84', 'center', 800);
-    game.players.forEach((p, i) => {
-      text(`${p.name}: ${C.countPlots(game, i)} plots, ${C.countBots(game, i)} bots, ${p.lostBots} ran off`, W / 2, 470 + i * 52, 36, PCOL[i], 'center');
-    });
-    text('Press A to go back to the start screen', W / 2, 720, 30, '#c8d2e3', 'center', 500);
+    text(game.banner.text, W / 2, 525, 64, '#ffffff', 'center', 800);
   }
 }
 
 function drawLobby() {
   drawBackground();
-  text('TENDIE TOWN', W / 2, 150, 110, '#3ddc84', 'center', 800);
-  text('The apes made it to the moon. Now somebody has to run the place.', W / 2, 250, 34, '#c8d2e3', 'center', 500);
+  text('TENDIE TOWN', W / 2, 130, 110, '#3ddc84', 'center', 800);
+  text('The apes made it to the moon. Now somebody has to run the place.', W / 2, 225, 34, '#c8d2e3', 'center', 500);
   for (let i = 0; i < SEATS; i++) {
     const x = 130 + i * 425;
-    const y = 340;
+    const y = 300;
     const s = lobby[i];
     ctx.fillStyle = '#161b28';
-    rr(x, y, 385, 330, 16);
+    rr(x, y, 385, 310, 16);
     ctx.fill();
     ctx.strokeStyle = PCOL[i];
     ctx.lineWidth = s ? 7 : 3;
     ctx.stroke();
-    drawWalker(x + 192, y + 130, PCOL[i], !s, 1);
+    drawWalker(x + 192, y + 120, PCOL[i], !s, 1);
     if (s) {
-      text(s.src === 'kbd' ? 'Keyboard' : `Controller ${s.pad + 1}`, x + 192, y + 220, 36, '#f1f4f8', 'center');
-      text('Ready · B to leave', x + 192, y + 272, 24, '#9aa7bd', 'center', 500);
+      text(s.src === 'kbd' ? 'Keyboard' : `Controller ${s.pad + 1}`, x + 192, y + 205, 36, '#f1f4f8', 'center');
+      text('Ready · B to leave', x + 192, y + 255, 24, '#9aa7bd', 'center', 500);
     } else {
-      text('Press A to join', x + 192, y + 220, 36, '#f1f4f8', 'center');
-      text('or a Hedgie plays this seat', x + 192, y + 272, 24, '#9aa7bd', 'center', 500);
+      text('Press A to join', x + 192, y + 205, 36, '#f1f4f8', 'center');
+      text('or a Hedgie plays this seat', x + 192, y + 255, 24, '#9aa7bd', 'center', 500);
     }
   }
-  text('Press the Menu button to start', W / 2, 760, 44, '#ffffff', 'center', 800);
-  text('The Dip grows tendies · craters give fuel · ridges hold chips and diamonds', W / 2, 840, 28, '#c8d2e3', 'center', 500);
-  text('Keyboard: Space joins, arrows move, X changes tool, B ends turn, Enter starts', W / 2, 900, 24, '#7f8ba1', 'center', 500);
-  text('On Xbox, if the controllers do nothing, switch the browser to controller mode', W / 2, 945, 24, '#7f8ba1', 'center', 500);
+  text('Press the Menu button to start', W / 2, 690, 44, '#ffffff', 'center', 800);
+  const lines = [
+    `${ROUNDS_OPT || C.ROUNDS} rounds · each round: grab land → take turns buying and placing bots → production → trading floor`,
+    'Every turn you eat tendies (3, later 5) and each non-fuel bot burns 1 fuel · run short and your turn gets shorter',
+    'The Dip grows tendies · plains and craters pump fuel · ridges mine chips · diamonds are hidden until you assay',
+    'Keyboard: Space = A, B = B, Enter = Menu, arrows move · On Xbox, if the controllers do nothing, switch the browser to controller mode',
+  ];
+  lines.forEach((l, k) => text(l, W / 2, 770 + k * 42, k === 3 ? 22 : 25, k === 3 ? '#7f8ba1' : '#c8d2e3', 'center', 500));
 }
 
 // ---------- main loop ----------
@@ -522,7 +884,7 @@ function frame(now) {
       overTimer += dt;
       const kb = keyboardInput();
       const pressed = kb.a || kb.start || padIn.some((p) => p && (p.a || p.start));
-      if ((overTimer > 1 && pressed) || (DEMO && overTimer > 8)) {
+      if ((overTimer > 1 && pressed) || (DEMO && overTimer > 12)) {
         mode = 'lobby';
         game = null;
       }

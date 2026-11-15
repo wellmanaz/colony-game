@@ -1,5 +1,5 @@
 // Plays AI-only games with no drawing and checks they finish sensibly.
-// Run with: node test/sim.js
+// Run with: node test/sim.js [games]
 
 import * as C from '../js/core.js';
 import { makeAI, aiInput } from '../js/ai.js';
@@ -15,48 +15,78 @@ function mulberry32(seed) {
   };
 }
 
-const GAMES = 200;
+const GAMES = Number(process.argv[2]) || 100;
 const dt = 1 / 60;
 let failures = 0;
-let totalPlots = 0;
-let totalBots = 0;
-let totalLost = 0;
+const agg = { plots: 0, bots: 0, lost: 0, worth: 0, colony: 0, success: 0, whales: 0, assays: 0, botsLeft: 0, minMoney: Infinity, maxWorth: 0, endings: {} };
+const wins = [0, 0, 0, 0];
+const worthBySeat = [0, 0, 0, 0];
+const botsBySeat = [0, 0, 0, 0];
+const dbg = [0, 1, 2, 3].map(() => ({}));
 
 for (let g = 0; g < GAMES; g++) {
   const defs = [0, 1, 2, 3].map((i) => ({ kind: 'ai', name: `Hedgie ${i + 1}` }));
   const s = C.newGame(defs, mulberry32(g + 1));
   const ais = defs.map(() => makeAI());
   let steps = 0;
-  while (s.phase !== 'over' && steps < 60 * 60 * 20) {
+  const seen = {};
+  while (s.phase !== 'over' && steps < 60 * 60 * 90) {
     C.update(
       s,
       defs.map((_, i) => aiInput(s, i, ais[i], dt)),
       dt
     );
+    s.players.forEach((p) => {
+      if (p.money < 0) seen.negativeMoney = true;
+      C.GOODS.forEach((gd) => {
+        if (p.goods[gd] < 0) seen.negativeGoods = true;
+      });
+    });
+    if (s.store.bots < 0 || Object.values(s.store.stock).some((v) => v < 0)) seen.negativeStore = true;
     steps++;
   }
-  const dips = s.tiles.filter((t) => t.type === 'dip').length;
-  const problems = [];
-  if (s.phase !== 'over') problems.push('did not finish');
-  if (dips < C.COLS) problems.push(`only ${dips} dip tiles`);
+  const problems = Object.keys(seen);
+  if (s.phase !== 'over') problems.push(`did not finish (phase ${s.phase}, round ${s.round})`);
   if (s.tiles.some((t) => t.exchange && (t.owner >= 0 || t.type !== 'plain'))) problems.push('exchange tile altered');
-  for (let i = 0; i < 4; i++) {
-    const plots = C.countPlots(s, i);
-    const bots = C.countBots(s, i);
-    totalPlots += plots;
-    totalBots += bots;
-    totalLost += s.players[i].lostBots;
-    if (plots > C.ROUNDS) problems.push(`seat ${i} has ${plots} plots`);
-    if (plots < C.ROUNDS - 2) problems.push(`seat ${i} only claimed ${plots} plots`);
-    if (bots < plots - 1) problems.push(`seat ${i} staffed ${bots} of ${plots} plots`);
+  const r = s.result;
+  if (r) {
+    agg.colony += r.colony;
+    agg.success += r.success ? 1 : 0;
+    agg.endings[r.ending] = (agg.endings[r.ending] || 0) + 1;
+    wins[r.rows[0].seat]++;
+    agg.maxWorth = Math.max(agg.maxWorth, r.rows[0].worth);
   }
+  for (let i = 0; i < 4; i++) {
+    const p = s.players[i];
+    agg.plots += C.countPlots(s, i);
+    agg.bots += C.countBots(s, i);
+    agg.lost += p.lostBots;
+    agg.whales += p.whales;
+    agg.worth += C.netWorth(s, p);
+    worthBySeat[i] += C.netWorth(s, p);
+    botsBySeat[i] += C.countBots(s, i);
+    Object.entries(p.dbg).forEach(([k, v]) => (dbg[i][k] = (dbg[i][k] || 0) + v));
+    dbg[i].whales = (dbg[i].whales || 0) + p.whales;
+    dbg[i].lost = (dbg[i].lost || 0) + p.lostBots;
+    dbg[i].money = (dbg[i].money || 0) + p.money;
+    agg.minMoney = Math.min(agg.minMoney, p.money);
+    if (C.countPlots(s, i) < 4) problems.push(`seat ${i} only has ${C.countPlots(s, i)} plots`);
+  }
+  agg.assays += s.tiles.filter((t) => t.assayed).length;
+  if (g < 3) console.log(`game ${g + 1} stats`, JSON.stringify(s.stats), 'store', JSON.stringify(s.store));
+  agg.botsLeft += s.store.bots;
   if (problems.length) {
     failures++;
     console.log(`game ${g + 1}: ${problems.join('; ')}`);
   }
 }
 
-console.log(
-  `${GAMES} games, ${failures} with problems. Average per seat: ${(totalPlots / GAMES / 4).toFixed(2)} plots, ${(totalBots / GAMES / 4).toFixed(2)} bots, ${(totalLost / GAMES / 4).toFixed(2)} bots ran off.`
-);
+const per = (v) => (v / GAMES / 4).toFixed(2);
+console.log(`${GAMES} games, ${failures} with problems.`);
+console.log(`Per seat: ${per(agg.plots)} plots, ${per(agg.bots)} bots, ${per(agg.lost)} bots lost, ${per(agg.whales)} whales, net worth $${Math.round(agg.worth / GAMES / 4)}`);
+console.log(`Colony: avg $${Math.round(agg.colony / GAMES)}, success ${agg.success}/${GAMES}, best player $${agg.maxWorth}, lowest cash seen $${agg.minMoney}`);
+console.log(`Assayed plots per game ${(agg.assays / GAMES).toFixed(1)}, bots left in lot ${(agg.botsLeft / GAMES).toFixed(1)}, wins by seat ${wins.join('/')}`);
+console.log('Endings:', agg.endings);
+dbg.forEach((d, i) => console.log(`seat ${i}`, Object.fromEntries(Object.entries(d).map(([k, v]) => [k, Math.round(v / GAMES)]))));
+console.log('Avg worth by seat', worthBySeat.map((w) => Math.round(w / GAMES)).join('/'), 'bots by seat', botsBySeat.map((b) => (b / GAMES).toFixed(1)).join('/'));
 process.exit(failures ? 1 : 0);
