@@ -1105,7 +1105,7 @@ function drawGoodChart(gi, age, top, bottom) {
   ctx.stroke();
   const stage = age < FALL ? 0 : age < FALL + RISE ? 1 : 2;
   const what = g === 'tendies' ? 'eaten and spoiled' : g === 'fuel' ? 'burned by bots and leaked' : g === 'chips' ? 'over the warehouse cap' : '';
-  const caption = stage === 0 ? what : stage === 1 ? 'produced' : 'ready to trade';
+  const caption = stage === 0 ? what : stage === 1 ? 'produced' : g === 'tendies' ? 'what everyone needs next round' : g === 'fuel' ? 'what everyone\'s bots will burn next round' : 'ready to trade';
   text(caption, W / 2, top + 20, 26, stage === 0 ? '#ff6b6b' : stage === 1 ? '#6be3a2' : '#c8d2e3', 'center', 800);
   rows.forEach((row, i) => {
     const L = row.ledger[g];
@@ -1135,7 +1135,28 @@ function drawGoodChart(gi, age, top, bottom) {
     text(String(Math.round(v)), x + bw / 2, baseY - bh - 22, 32, '#f1f4f8', 'center', 800);
     if (tag) text(tag, x + bw / 2, baseY - bh - 56, 26, tagColor, 'center', 800);
     text(game.players[row.seat].name, x + bw / 2, baseY + 24, 20, '#c8d2e3', 'center', 600);
+    // What this player needs next round, as a line across the bar.
+    let need = null;
+    if (g === 'tendies') need = C.foodNeed(game.round + 1);
+    else if (g === 'fuel') need = C.nonFuelBots(game, row.seat);
+    if (need !== null && stage === 2) {
+      const ny = baseY - (need / scale) * maxH;
+      ctx.strokeStyle = '#fff';
+      ctx.setLineDash([6, 5]);
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(x - 14, ny);
+      ctx.lineTo(x + bw + 14, ny);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const diff = L.after - need;
+      const label = diff < 0 ? `needs ${need} · SHORT ${-diff}` : diff === 0 ? `needs ${need} · just enough` : `needs ${need} · ${diff} spare`;
+      text(label, x + bw / 2, baseY + 50, 18, diff < 0 ? '#ff6b6b' : diff === 0 ? '#ffd84d' : '#6be3a2', 'center', 700);
+    }
   });
+  if (stage === 2 && g === 'chips') {
+    text(`The Exchange turns 2 chips into a bot, 2 bots a round · Bot Lot has ${game.store.bots} left`, W / 2, baseY + 50, 18, '#c8d2e3', 'center', 600);
+  }
   text(stage === 2 ? 'A to open the floor' : '', W / 2, 910, 26, '#f1f4f8', 'center', 800);
 }
 
