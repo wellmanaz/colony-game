@@ -15,7 +15,12 @@ const UNTIL = PARAMS.get('until') || ''; // demo only: fast-forward until a phas
 const opts = { rounds: Number(PARAMS.get('rounds')) === 6 ? 6 : 12, protect: PARAMS.has('protect') };
 
 const music = new Music();
-if (PARAMS.get('music')) music.useTrack(PARAMS.get('music')); // ?music=<url> plays your own track
+// Background track: the M.U.L.E. main theme (Roy Glover), streamed from the
+// site where it is hosted; the game stores no copy. ?music=synth uses the
+// built-in loop instead, ?music=<url> any other track.
+const DEFAULT_TRACK = 'https://nu.vgmtreasurechest.com/soundtracks/m.u.l.e.-commodore-64/peefogmq/04_Main%20Theme%20%28SID%20Stereo%29.mp3';
+const trackParam = PARAMS.get('music');
+if (trackParam !== 'synth') music.useTrack(trackParam || DEFAULT_TRACK);
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -1058,7 +1063,7 @@ function drawLobby() {
     'Each round: grab land → take turns buying and placing bots → production → trading floor',
     'Every turn you eat tendies (3, later 5) and each non-fuel bot burns 1 fuel · run short and your turn gets shorter',
     'The Dip grows tendies · plains and craters pump fuel · ridges mine chips · diamonds are hidden until you assay',
-    `Y or M toggles music${music.muted ? ' (muted)' : ''}${music.custom ? ' (your own track)' : ''} · Keyboard: Space = A, B = B, X = X, P = LB, Enter = Menu, arrows move · On Xbox, if the controllers do nothing, switch the browser to controller mode`,
+    `Y or M toggles music${music.muted ? ' (muted)' : ''}${music.custom ? '' : ' (built-in loop)'} · Keyboard: Space = A, B = B, X = X, P = LB, Enter = Menu, arrows move · On Xbox, if the controllers do nothing, switch the browser to controller mode`,
   ];
   lines.forEach((l, k) => text(l, W / 2, 770 + k * 42, k === 3 ? 22 : 25, k === 3 ? '#7f8ba1' : '#c8d2e3', 'center', 500));
 }

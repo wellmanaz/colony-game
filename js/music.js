@@ -81,6 +81,16 @@ export class Music {
     el.loop = true;
     el.volume = 0.5;
     el.preload = 'auto';
+    // If the track cannot be fetched, fall back to the built-in loop.
+    el.addEventListener('error', () => {
+      if (this.custom !== el) return;
+      this.custom = null;
+      if (this.playing && this.ctx && !this.paused) {
+        this.step = 0;
+        this.nextTime = this.ctx.currentTime + 0.1;
+        this.timer = setInterval(() => this.schedule(), 40);
+      }
+    });
     this.custom = el;
   }
 
