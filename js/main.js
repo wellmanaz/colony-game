@@ -1097,12 +1097,23 @@ function drawAuction() {
   text(`${o.name.toUpperCase()} AUCTION`, W / 2 + 40, 150, 64, o.color, 'center', 800);
   drawGoodIcon(o.id, W / 2 - 40 - ctx.measureText(`${o.name.toUpperCase()} AUCTION`).width / 2, 150, 64);
 
+  // What this good is actually for, so the bidding makes sense.
+  const WHY = {
+    tendies: `TENDIES = TIME. You eat ${C.foodNeed(game.round + 1)} next round; go hungry and your turn shrinks to a blink.`,
+    fuel: 'FUEL = PRODUCTION. Every bot that isn\'t a fuel rig burns 1 a round or sits there doing nothing.',
+    chips: 'CHIPS = ROBOTS. The Exchange builds new bots only from the chips you sell it (2 each). No chips, no bots, for anyone.',
+    diamonds: 'DIAMONDS = MONEY. Pure profit; nobody needs them and the Exchange pays whatever the offworld market says.',
+  };
+  ctx.fillStyle = 'rgba(255,216,77,0.12)';
+  rr(160, 232, 1600, 40, 20);
+  ctx.fill();
+  text(WHY[a.good], W / 2, 252, 21, '#ffd84d', 'center', 700);
   const sells = a.good !== 'diamonds' && st.stock[a.good] > 0;
   const stockText = a.good === 'diamonds' ? 'has buyers offworld' : `has ${st.stock[a.good]} in stock`;
   const sellText = sells ? `sells at ${money(st.sell[a.good])}` : 'has NOTHING to sell — no ceiling';
   text(`The Exchange ${stockText} · ${sellText} · buys at ${money(st.buy[a.good])}`, W / 2, 205, 26, sells ? '#c8d2e3' : '#ffd84d', 'center', 500);
 
-  const top = 280;
+  const top = 345;
   const bottom = 840;
   const yOf = (price) => bottom - (price / a.axisMax) * (bottom - top);
   const colX = (i) => 480 + i * 320;
@@ -1112,11 +1123,11 @@ function drawAuction() {
     return;
   }
   if (a.stage === 'declare') {
-    text(`Buying or selling? ${Math.ceil(a.t)}`, W / 2, 262, 40, '#fff', 'center', 800);
+    text(`Buying or selling? ${Math.ceil(a.t)}`, W / 2, 305, 40, '#fff', 'center', 800);
     game.players.forEach((p, i) => {
       const x = colX(i);
       const role = a.roles[i];
-      const y = role === 'buy' ? bottom - 130 : top + 60;
+      const y = role === 'buy' ? bottom - 130 : top + 80;
       drawWalker(x, y, PCOL[i], p.kind === 'ai', 1, p.char);
       text(p.name, x, y + 60, 24, '#f1f4f8', 'center');
       text((role === 'buy' ? 'BUYING' : 'SELLING') + (a.locked[i] ? ' ✓' : ''), x, y + 90, 26, role === 'buy' ? '#6be3a2' : '#ff8ad8', 'center', 800);
@@ -1139,8 +1150,8 @@ function drawAuction() {
     ctx.stroke();
     text(money(p), 285, y, 20, '#7f8ba1', 'right', 500);
   }
-  text('SELLERS ▼', W / 2, top - 40, 22, '#ff8ad8', 'center', 800);
-  text('BUYERS ▲', W / 2, bottom + 28, 22, '#6be3a2', 'center', 800);
+  text('SELLERS ▼', 1600, top + 16, 20, '#ff8ad8', 'right', 800);
+  text('BUYERS ▲', 1600, bottom - 16, 20, '#6be3a2', 'right', 800);
 
   const dashed = (price, color, label) => {
     const y = yOf(price);
