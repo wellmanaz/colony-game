@@ -38,6 +38,21 @@ export const OUTFITS = [
   { id: 'diamonds', name: 'Diamonds', tool: 'Diamond hands', shop: 'Diamond Cutter', letter: 'D', color: '#c9a4ff', cost: 100 },
 ];
 const MIN_PRICE = { tendies: 15, fuel: 10, chips: 14, diamonds: 50 };
+
+// Playable characters. Like the original's species, they are mostly a look
+// plus a handicap: starting cash and turn length. The Degen also feels
+// random events and the YOLO Bar twice as hard, in both directions.
+export const CHARACTERS = [
+  { id: 'ape', name: 'Ape', blurb: 'Diamond hands · the standard deal', money: 1000, time: 1, swing: 1 },
+  { id: 'autist', name: 'Autist', blurb: 'Expert · less cash, shorter turns', money: 700, time: 0.85, swing: 1 },
+  { id: 'degen', name: 'Degen', blurb: 'Luck and the YOLO Bar hit 2× as hard', money: 1000, time: 1, swing: 2 },
+  { id: 'smooth', name: 'Smooth-Brain', blurb: 'Beginner · more cash, longer turns', money: 1400, time: 1.2, swing: 1 },
+];
+export const HEDGIE = { id: 'hedgie', name: 'Hedgie', money: 1000, time: 1, swing: 1 };
+
+export function characterOf(p) {
+  return CHARACTERS.find((c) => c.id === p.char) || HEDGIE;
+}
 // The Exchange buys anything offered at its price, but it can only sell
 // what it has actually been sold: run it dry and there is no ceiling.
 
@@ -254,7 +269,8 @@ export function newGame(seatDefs, rng = Math.random, opts = {}) {
       index: i,
       kind: d.kind,
       name: d.name,
-      money: START_MONEY,
+      char: d.char || (d.kind === 'ai' ? 'hedgie' : 'ape'),
+      money: (CHARACTERS.find((c) => c.id === d.char) || HEDGIE).money,
       goods: { tendies: 4, fuel: 2, chips: 0, diamonds: 0 },
       claimed: false,
       lostBots: 0,
@@ -466,7 +482,7 @@ function updateLand(s, inputs, dt) {
 
 function turnLength(p) {
   const f = [1, 0.72, 0.4, 0.2][Math.min(3, p.foodShort)];
-  return Math.round(FULL_TURN * f);
+  return Math.round(FULL_TURN * f * characterOf(p).time);
 }
 
 function startTurn(s, seat) {
@@ -586,7 +602,7 @@ function enterBuilding(s, tu, b) {
       toast(s, `Walk to a plot you own and press A to list it for next round's auction (reserve $${PLOT_VALUE}). A again withdraws it.`, 4);
     }
   } else if (b.id === 'pub') {
-    const base = 50 + (s.round - 1) * 18;
+    const base = (50 + (s.round - 1) * 18) * characterOf(p).swing;
     const win = Math.max(10, Math.round((base * tu.t) / tu.length));
     p.money += win;
     p.dbg.pub += win;
@@ -760,7 +776,7 @@ function maybePlayerEvent(s, p) {
   s.playerEventsUsed[`${p.index}:${e.id}`] = true;
   let text = e.text;
   if (e.money) {
-    const amt = Math.round((25 * (s.round + 2) * Math.abs(e.money)) / 5) * 5 * Math.sign(e.money);
+    const amt = Math.round((25 * (s.round + 2) * Math.abs(e.money) * characterOf(p).swing) / 5) * 5 * Math.sign(e.money);
     p.money = Math.max(0, p.money + amt);
     p.dbg.event += amt;
     text += ` (${amt > 0 ? '+' : '−'}$${Math.abs(amt)})`;

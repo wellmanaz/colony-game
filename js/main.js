@@ -29,6 +29,7 @@ const ctx = canvas.getContext('2d');
 
 const ZERO = { x: 0, y: 0, a: false, b: false, alt: false, start: false };
 const padPrev = [];
+const padPrevX = [];
 let padIn = [];
 
 function pollPads() {
@@ -55,9 +56,13 @@ function pollPads() {
     if (down[15]) x = 1;
     if (down[12]) y = -1;
     if (down[13]) y = 1;
-    padIn.push({ x, y, a: edge(0), b: edge(1), alt: edge(2), start: edge(9), music: edge(3), lb: edge(4) });
+    const px = padPrevX[i] || 0;
+    const left = (x < -0.5 && px >= -0.5) || edge(14);
+    const right = (x > 0.5 && px <= 0.5) || edge(15);
+    padIn.push({ x, y, a: edge(0), b: edge(1), alt: edge(2), start: edge(9), music: edge(3), lb: edge(4), left, right });
     if (down.some((d, k) => d && !prev[k])) music.start();
     padPrev[i] = down;
+    padPrevX[i] = x;
   }
 }
 
@@ -83,28 +88,53 @@ function keyboardInput() {
     start: keysHit.has('Enter'),
     music: keysHit.has('KeyM'),
     lb: keysHit.has('KeyP'),
+    left: keysHit.has('ArrowLeft') || keysHit.has('KeyA'),
+    right: keysHit.has('ArrowRight') || keysHit.has('KeyD'),
   };
 }
 
 // ---------- lobby and game setup ----------
 
 let mode = 'lobby';
-let lobby = new Array(SEATS).fill(null); // { src: 'pad', pad } | { src: 'kbd' }
+let lobby = new Array(SEATS).fill(null); // { src: 'pad'|'kbd', pad, char, ready }
+if (PARAMS.has('lobbydemo')) {
+  // for screenshots: a lobby with people in it
+  lobby = [
+    { src: 'kbd', char: 0, ready: true },
+    { src: 'pad', pad: 0, char: 1, ready: false },
+    { src: 'pad', pad: 1, char: 2, ready: true },
+    { src: 'pad', pad: 2, char: 3, ready: false },
+  ];
+}
 let seats = [];
 let ais = [];
 let game = null;
 let overTimer = 0;
+
+// One player's lobby input: join, browse characters, ready up, leave.
+function lobbySeatInput(inp, seat, join) {
+  if (seat < 0) {
+    if (inp.a) {
+      const free = lobby.indexOf(null);
+      if (free >= 0) lobby[free] = join({ char: free % C.CHARACTERS.length, ready: false });
+    }
+    return;
+  }
+  const s = lobby[seat];
+  if (!s.ready) {
+    if (inp.left) s.char = (s.char + C.CHARACTERS.length - 1) % C.CHARACTERS.length;
+    if (inp.right) s.char = (s.char + 1) % C.CHARACTERS.length;
+    if (inp.a) s.ready = true;
+    else if (inp.b) lobby[seat] = null;
+  } else if (inp.b) s.ready = false;
+}
 
 function updateLobby() {
   let start = false;
   padIn.forEach((p, i) => {
     if (!p) return;
     const seat = lobby.findIndex((s) => s && s.src === 'pad' && s.pad === i);
-    if (p.a && seat < 0) {
-      const free = lobby.indexOf(null);
-      if (free >= 0) lobby[free] = { src: 'pad', pad: i };
-    }
-    if (p.b && seat >= 0) lobby[seat] = null;
+    lobbySeatInput(p, seat, (base) => ({ src: 'pad', pad: i, ...base }));
     if (p.start) start = true;
     if (p.alt) opts.rounds = opts.rounds === 12 ? 6 : 12;
     if (p.lb) opts.protect = !opts.protect;
@@ -113,22 +143,29 @@ function updateLobby() {
   if (kb.alt) opts.rounds = opts.rounds === 12 ? 6 : 12;
   if (kb.lb) opts.protect = !opts.protect;
   const kbSeat = lobby.findIndex((s) => s && s.src === 'kbd');
-  if (kb.a && kbSeat < 0) {
-    const free = lobby.indexOf(null);
-    if (free >= 0) lobby[free] = { src: 'kbd' };
-  }
-  if (kb.b && kbSeat >= 0) lobby[kbSeat] = null;
+  lobbySeatInput(kb, kbSeat, (base) => ({ src: 'kbd', ...base }));
   if (kb.start) start = true;
-  if (start) startGame();
+  const joined = lobby.filter(Boolean);
+  if (start && joined.every((s) => s.ready)) startGame();
 }
 
 function startGame() {
   seats = lobby.slice();
-  let apes = 0;
   let hedgies = 0;
-  const defs = seats.map((s) =>
-    s ? { kind: 'human', name: `Ape ${++apes}` } : { kind: 'ai', name: `Hedgie ${++hedgies}` }
-  );
+  const used = {};
+  const defs = seats.map((s) => {
+    if (!s) return { kind: 'ai', name: `Hedgie ${++hedgies}`, char: 'hedgie' };
+    const c = C.CHARACTERS[s.char];
+    used[c.id] = (used[c.id] || 0) + 1;
+    return { kind: 'human', name: c.name, char: c.id };
+  });
+  // Two of the same character get numbered.
+  defs.forEach((d) => {
+    if (used[d.char] > 1) {
+      used[d.char + ':n'] = (used[d.char + ':n'] || 0) + 1;
+      d.name = `${d.name} ${used[d.char + ':n']}`;
+    }
+  });
   ais = seats.map(() => makeAI());
   game = C.newGame(defs, Math.random, opts);
   mode = 'game';
@@ -272,62 +309,207 @@ function drawBot(x, y, outfit, scale = 1, opts = {}) {
   ctx.restore();
 }
 
-function drawWalker(x, y, color, isAI, facing) {
+// Characters. Drawn to about 60px tall at scale 1, feet at y.
+function drawCharacter(id, x, y, scale, color, facing = 1, now = 0) {
   ctx.save();
   ctx.translate(x, y);
+  ctx.scale(scale * facing, scale);
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.beginPath();
-  ctx.ellipse(0, 34, 26, 8, 0, 0, 7);
+  ctx.ellipse(0, 2, 26, 7, 0, 0, 7);
   ctx.fill();
-  if (isAI) {
+  const eye = (ex, ey, r = 2.6) => {
+    ctx.fillStyle = '#141821';
+    ctx.beginPath();
+    ctx.arc(ex, ey, r, 0, 7);
+    ctx.fill();
+  };
+  if (id === 'hedgie') {
     ctx.fillStyle = '#3a4152';
-    rr(-22, -4, 44, 38, 10);
+    rr(-22, -38, 44, 38, 10);
     ctx.fill();
     ctx.fillStyle = '#f1f3f6';
     ctx.beginPath();
-    ctx.moveTo(-8, -4);
-    ctx.lineTo(8, -4);
-    ctx.lineTo(0, 12);
+    ctx.moveTo(-8, -38);
+    ctx.lineTo(8, -38);
+    ctx.lineTo(0, -22);
     ctx.fill();
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.moveTo(-4, -2);
-    ctx.lineTo(4, -2);
-    ctx.lineTo(3, 20);
-    ctx.lineTo(0, 25);
-    ctx.lineTo(-3, 20);
+    ctx.moveTo(-4, -36);
+    ctx.lineTo(4, -36);
+    ctx.lineTo(3, -14);
+    ctx.lineTo(0, -9);
+    ctx.lineTo(-3, -14);
     ctx.fill();
     ctx.fillStyle = '#e3c4a4';
     ctx.beginPath();
-    ctx.arc(0, -20, 18, 0, 7);
+    ctx.arc(0, -54, 18, 0, 7);
     ctx.fill();
     ctx.fillStyle = '#2a2f3c';
     ctx.beginPath();
-    ctx.arc(0, -26, 18, Math.PI, 0);
+    ctx.arc(0, -60, 18, Math.PI, 0);
     ctx.fill();
-  } else {
+    eye(-6, -55);
+    eye(6, -55);
+  } else if (id === 'ape') {
+    // gorilla in a blue suit, red tie, a diamond in each fist
+    ctx.fillStyle = '#2f5fd8';
+    rr(-26, -42, 52, 42, 10);
+    ctx.fill();
+    ctx.fillStyle = '#f1f3f6';
+    ctx.beginPath();
+    ctx.moveTo(-9, -42);
+    ctx.lineTo(9, -42);
+    ctx.lineTo(0, -24);
+    ctx.fill();
+    ctx.fillStyle = '#e03a3a';
+    ctx.beginPath();
+    ctx.moveTo(-4, -40);
+    ctx.lineTo(4, -40);
+    ctx.lineTo(3, -16);
+    ctx.lineTo(0, -10);
+    ctx.lineTo(-3, -16);
+    ctx.fill();
+    ctx.fillStyle = '#3b3f47';
+    ctx.beginPath();
+    ctx.arc(0, -58, 20, 0, 7);
+    ctx.fill();
+    ctx.fillStyle = '#6a6f78';
+    ctx.beginPath();
+    ctx.ellipse(0, -52, 13, 10, 0, 0, 7);
+    ctx.fill();
+    eye(-6, -60);
+    eye(6, -60);
+    ctx.fillStyle = '#3b3f47';
+    ctx.beginPath();
+    ctx.arc(-30, -40, 8, 0, 7);
+    ctx.arc(30, -40, 8, 0, 7);
+    ctx.fill();
+    [-30, 30].forEach((dx) => {
+      ctx.fillStyle = '#4fd0ff';
+      ctx.beginPath();
+      ctx.moveTo(dx, -58);
+      ctx.lineTo(dx + 8, -50);
+      ctx.lineTo(dx, -38);
+      ctx.lineTo(dx - 8, -50);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.beginPath();
+      ctx.moveTo(dx - 3, -54);
+      ctx.lineTo(dx + 1, -52);
+      ctx.lineTo(dx - 2, -48);
+      ctx.fill();
+    });
+  } else if (id === 'autist') {
+    // white shirt, pocket full of pens, glasses, messy brown hair
+    ctx.fillStyle = '#f4f6f9';
+    rr(-22, -40, 44, 40, 10);
+    ctx.fill();
     ctx.fillStyle = color;
-    rr(-22, -4, 44, 38, 14);
+    rr(8, -36, 10, 10, 2);
     ctx.fill();
-    ctx.fillStyle = '#5b3d2b';
+    ['#e03a3a', '#2f5fd8', '#141821'].forEach((c, i) => {
+      ctx.fillStyle = c;
+      ctx.fillRect(9 + i * 3, -42, 2, 8);
+    });
+    ctx.fillStyle = '#efc9a4';
     ctx.beginPath();
-    ctx.arc(-19, -22, 8, 0, 7);
-    ctx.arc(19, -22, 8, 0, 7);
+    ctx.arc(0, -56, 17, 0, 7);
     ctx.fill();
+    ctx.fillStyle = '#7a4a22';
     ctx.beginPath();
-    ctx.arc(0, -20, 20, 0, 7);
+    ctx.moveTo(-18, -58);
+    ctx.lineTo(-12, -76);
+    ctx.lineTo(-4, -66);
+    ctx.lineTo(2, -78);
+    ctx.lineTo(8, -66);
+    ctx.lineTo(16, -74);
+    ctx.lineTo(18, -58);
+    ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = '#e0b48c';
+    ctx.strokeStyle = '#141821';
+    ctx.lineWidth = 2.5;
+    ctx.strokeRect(-14, -60, 11, 8);
+    ctx.strokeRect(3, -60, 11, 8);
     ctx.beginPath();
-    ctx.ellipse(facing * 3, -15, 13, 11, 0, 0, 7);
+    ctx.moveTo(-3, -56);
+    ctx.lineTo(3, -56);
+    ctx.stroke();
+    eye(-8, -56, 2);
+    eye(8, -56, 2);
+    ctx.strokeStyle = '#3ddc84';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(-40, -30);
+    ctx.lineTo(-34, -40);
+    ctx.lineTo(-30, -34);
+    ctx.lineTo(-24, -48);
+    ctx.stroke();
+  } else if (id === 'degen') {
+    // stained yellow shirt, stubble, heavy eyes, an energy drink
+    ctx.fillStyle = '#d9c64a';
+    rr(-28, -40, 56, 40, 12);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(120,90,20,0.5)';
+    ctx.beginPath();
+    ctx.arc(8, -22, 5, 0, 7);
+    ctx.arc(-10, -14, 3, 0, 7);
+    ctx.fill();
+    ctx.fillStyle = '#e8c39e';
+    ctx.beginPath();
+    ctx.arc(0, -56, 19, 0, 7);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(80,60,40,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(0, -46, 13, 7, 0, 0, 7);
+    ctx.fill();
+    ctx.fillStyle = '#6b4a2b';
+    [-10, -4, 3, 9].forEach((hx) => {
+      ctx.fillRect(hx, -76, 2, 6);
+    });
+    ctx.fillStyle = '#141821';
+    ctx.fillRect(-11, -58, 8, 3);
+    ctx.fillRect(3, -58, 8, 3);
+    ctx.fillStyle = 'rgba(90,40,60,0.4)';
+    ctx.fillRect(-11, -55, 8, 3);
+    ctx.fillRect(3, -55, 8, 3);
+    ctx.fillStyle = '#e03a3a';
+    rr(26, -34, 9, 16, 2);
+    ctx.fill();
+  } else if (id === 'smooth') {
+    // a pink brain, perfectly smooth, with a couple of friendly eyes
+    ctx.fillStyle = '#f2a8c0';
+    ctx.beginPath();
+    ctx.ellipse(0, -36, 34, 30, 0, 0, 7);
+    ctx.fill();
+    ctx.fillStyle = '#e88aaa';
+    ctx.beginPath();
+    ctx.ellipse(-2, -20, 24, 10, 0, 0, 7);
+    ctx.fill();
+    ctx.strokeStyle = '#d8789a';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, -66);
+    ctx.quadraticCurveTo(4, -40, 0, -24);
+    ctx.stroke();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(-9, -40, 5, 0, 7);
+    ctx.arc(9, -40, 5, 0, 7);
+    ctx.fill();
+    eye(-8, -40, 2.4);
+    eye(10, -40, 2.4);
+    ctx.fillStyle = color;
+    rr(-12, -10, 24, 8, 4);
     ctx.fill();
   }
-  ctx.fillStyle = '#141821';
-  ctx.beginPath();
-  ctx.arc(facing * 3 - 6, -21, 2.6, 0, 7);
-  ctx.arc(facing * 3 + 6, -21, 2.6, 0, 7);
-  ctx.fill();
   ctx.restore();
+}
+
+function drawWalker(x, y, color, isAI, facing, charId) {
+  drawCharacter(charId || (isAI ? 'hedgie' : 'ape'), x, y + 34, 1, color, facing);
 }
 
 function drawCoin(x, y, now) {
@@ -470,7 +652,7 @@ function drawExchange() {
   ctx.lineWidth = 5;
   ctx.stroke();
   text('THE EXCHANGE', x + w / 2, y + 44, 34, '#3ddc84', 'center', 800);
-  text('walk in for bots, tools, assays and the bar', x + w / 2, y + 80, 20, '#7f8ba1', 'center', 500);
+  text('bots · tools · assay · land · bar', x + w / 2, y + 78, 18, '#7f8ba1', 'center', 500);
   ctx.strokeStyle = '#3ddc84';
   ctx.lineWidth = 6;
   ctx.lineJoin = 'round';
@@ -578,7 +760,7 @@ function drawTown(now) {
   });
 
   if (tu.hasBot) drawBot(tu.bx, tu.by, tu.outfit, 0.9, { now, moving: tu.moving, facing: tu.facing });
-  drawWalker(tu.x, tu.y, PCOL[tu.seat], p.kind === 'ai', tu.facing);
+  drawWalker(tu.x, tu.y, PCOL[tu.seat], p.kind === 'ai', tu.facing, p.char);
   if (tu.assay === 'have-sample') text('🧪', tu.x + 34, tu.y - 40, 30, '#fff', 'center');
 }
 
@@ -681,7 +863,7 @@ function drawAuction() {
       const x = colX(i);
       const role = a.roles[i];
       const y = role === 'buy' ? bottom - 130 : top + 60;
-      drawWalker(x, y, PCOL[i], p.kind === 'ai', 1);
+      drawWalker(x, y, PCOL[i], p.kind === 'ai', 1, p.char);
       text(p.name, x, y + 60, 24, '#f1f4f8', 'center');
       text(role === 'buy' ? 'BUYING' : 'SELLING', x, y + 90, 26, role === 'buy' ? '#6be3a2' : '#ff8ad8', 'center', 800);
       text(`has ${p.goods[a.good]} · ${money(p.money)}`, x, y + 118, 20, '#9aa7bd', 'center', 500);
@@ -741,7 +923,7 @@ function drawAuction() {
     ctx.globalAlpha = a.active[i] ? 1 : 0.4;
     ctx.fillStyle = PCOL[i];
     ctx.fillRect(x - 50, y - 3, 100, 6);
-    drawWalker(x, buyer ? y + 30 : y - 30, PCOL[i], p.kind === 'ai', 1);
+    drawWalker(x, buyer ? y + 30 : y - 30, PCOL[i], p.kind === 'ai', 1, p.char);
     // Sellers parked at the very top get their tag below the line instead.
     const tagY = buyer ? y + 82 : a.price[i] > a.axisMax * 0.85 ? y + 22 : y - 86;
     text(money(a.price[i]), x, tagY, 22, '#fff', 'center', 800);
@@ -919,7 +1101,7 @@ function drawLand(now) {
     ctx.fillStyle = PCOL[i];
     rr(x, baseY - h, 100, h, 8);
     ctx.fill();
-    drawWalker(x + 50, baseY - h - 40, PCOL[i], p.kind === 'ai', 1);
+    drawWalker(x + 50, baseY - h - 40, PCOL[i], p.kind === 'ai', 1, p.char);
     text(selling ? 'seller' : money(bid), x + 50, baseY - h - 96, 24, '#fff', 'center', 800);
     if (L.leader === i) text('👑 leading', x + 50, baseY - h - 124, 20, '#ffd84d', 'center', 800);
     text(p.name, x + 50, baseY + 22, 18, '#c8d2e3', 'center', 600);
@@ -1063,7 +1245,7 @@ function drawGame(now) {
     else {
       drawMap(now);
       if (tu.hasBot) drawBot(tu.bx, tu.by, tu.outfit, 0.9, { now, moving: tu.moving, facing: tu.facing });
-      drawWalker(tu.x, tu.y, PCOL[tu.seat], p.kind === 'ai', tu.facing);
+      drawWalker(tu.x, tu.y, PCOL[tu.seat], p.kind === 'ai', tu.facing, p.char);
       if (tu.assay === 'have-sample') text('🧪', tu.x + 34, tu.y - 40, 30, '#fff', 'center');
       game.runaways.forEach((r) => {
         const wob = Math.sin(now / 45) * 9;
@@ -1085,36 +1267,54 @@ function drawGame(now) {
 
 function drawLobby() {
   drawBackground();
-  text('TENDIE TOWN', W / 2, 130, 110, '#3ddc84', 'center', 800);
-  text('The apes made it to the moon. Now somebody has to run the place.', W / 2, 225, 34, '#c8d2e3', 'center', 500);
+  text('TENDIE TOWN', W / 2, 110, 100, '#3ddc84', 'center', 800);
+  text('The apes made it to the moon. Now somebody has to run the place.', W / 2, 190, 30, '#c8d2e3', 'center', 500);
+  const joined = lobby.filter(Boolean);
+  const allReady = joined.every((s) => s.ready);
   for (let i = 0; i < SEATS; i++) {
     const x = 130 + i * 425;
-    const y = 300;
+    const y = 250;
     const s = lobby[i];
     ctx.fillStyle = '#161b28';
-    rr(x, y, 385, 310, 16);
+    rr(x, y, 385, 400, 16);
     ctx.fill();
     ctx.strokeStyle = PCOL[i];
     ctx.lineWidth = s ? 7 : 3;
     ctx.stroke();
-    drawWalker(x + 192, y + 120, PCOL[i], !s, 1);
-    if (s) {
-      text(s.src === 'kbd' ? 'Keyboard' : `Controller ${s.pad + 1}`, x + 192, y + 205, 36, '#f1f4f8', 'center');
-      text('Ready · B to leave', x + 192, y + 255, 24, '#9aa7bd', 'center', 500);
-    } else {
-      text('Press A to join', x + 192, y + 205, 36, '#f1f4f8', 'center');
-      text('or a Hedgie plays this seat', x + 192, y + 255, 24, '#9aa7bd', 'center', 500);
+    if (!s) {
+      ctx.globalAlpha = 0.5;
+      drawCharacter('hedgie', x + 192, y + 230, 1.8, PCOL[i]);
+      ctx.globalAlpha = 1;
+      text('Press A to join', x + 192, y + 300, 32, '#f1f4f8', 'center');
+      text('or a Hedgie plays this seat', x + 192, y + 340, 22, '#9aa7bd', 'center', 500);
+      continue;
     }
+    const c = C.CHARACTERS[s.char];
+    if (!s.ready) {
+      text('◀', x + 40, y + 160, 40, '#9aa7bd', 'center', 800);
+      text('▶', x + 345, y + 160, 40, '#9aa7bd', 'center', 800);
+    }
+    drawCharacter(c.id, x + 192, y + 230, 1.9, PCOL[i]);
+    text(c.name.toUpperCase(), x + 192, y + 282, 32, '#f1f4f8', 'center', 800);
+    text(c.blurb, x + 192, y + 316, 18, '#c8d2e3', 'center', 500);
+    text(`${money(c.money)} · turns ×${c.time}`, x + 192, y + 344, 18, '#9aa7bd', 'center', 500);
+    if (s.ready) {
+      ctx.fillStyle = PCOL[i];
+      rr(x + 100, y + 362, 185, 30, 15);
+      ctx.fill();
+      text('READY · B to change', x + 192, y + 377, 18, '#141821', 'center', 800);
+    } else text(`${s.src === 'kbd' ? 'Keyboard' : `Controller ${s.pad + 1}`} · ◀ ▶ pick · A ready · B leave`, x + 192, y + 377, 17, '#9aa7bd', 'center', 500);
   }
-  text('Press the Menu button to start', W / 2, 670, 44, '#ffffff', 'center', 800);
-  text(`X: ${opts.rounds} rounds (${opts.rounds === 12 ? 'full game' : 'short game'})   ·   LB: starvation protection ${opts.protect ? 'ON — you cannot sell food and fuel you need' : 'OFF — sell whatever you like, go hungry if you must'}`, W / 2, 722, 24, '#ffd84d', 'center', 600);
+  const canStart = allReady;
+  text(joined.length && !allReady ? 'Waiting for everyone to press A' : 'Press the Menu button to start', W / 2, 700, 40, canStart ? '#ffffff' : '#7f8ba1', 'center', 800);
+  text(`X: ${opts.rounds} rounds (${opts.rounds === 12 ? 'full game' : 'short game'})   ·   LB: starvation protection ${opts.protect ? 'ON — you cannot sell food and fuel you need' : 'OFF — sell whatever you like, go hungry if you must'}`, W / 2, 748, 22, '#ffd84d', 'center', 600);
   const lines = [
     'Each round: grab land → take turns buying and placing bots → production → trading floor',
     'Every turn you eat tendies (3, later 5) and each non-fuel bot burns 1 fuel · run short and your turn gets shorter',
     'The Dip grows tendies · plains and craters pump fuel · ridges mine chips · diamonds are hidden until you assay',
     `Y or M toggles music${music.muted ? ' (muted)' : ''}${music.custom ? '' : ' (built-in loop)'} · Keyboard: Space = A, B = B, X = X, P = LB, Enter = Menu, arrows move · On Xbox, if the controllers do nothing, switch the browser to controller mode`,
   ];
-  lines.forEach((l, k) => text(l, W / 2, 770 + k * 42, k === 3 ? 22 : 25, k === 3 ? '#7f8ba1' : '#c8d2e3', 'center', 500));
+  lines.forEach((l, k) => text(l, W / 2, 800 + k * 38, k === 3 ? 20 : 23, k === 3 ? '#7f8ba1' : '#c8d2e3', 'center', 500));
 }
 
 // ---------- main loop ----------
