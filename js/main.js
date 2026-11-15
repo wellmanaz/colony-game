@@ -2,6 +2,7 @@
 
 import * as C from './core.js';
 import { makeAI, aiInput } from './ai.js';
+import { Music } from './music.js';
 
 const W = 1920;
 const H = 1080;
@@ -11,6 +12,8 @@ const PARAMS = new URLSearchParams(location.search);
 const DEMO = PARAMS.has('demo'); // AI-only game that starts by itself
 const SKIP = Number(PARAMS.get('skip')) || 0; // demo only: seconds to fast-forward at start
 const ROUNDS_OPT = Number(PARAMS.get('rounds')) || 0;
+
+const music = new Music();
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -45,7 +48,8 @@ function pollPads() {
     if (down[15]) x = 1;
     if (down[12]) y = -1;
     if (down[13]) y = 1;
-    padIn.push({ x, y, a: edge(0), b: edge(1), alt: edge(2), start: edge(9) });
+    padIn.push({ x, y, a: edge(0), b: edge(1), alt: edge(2), start: edge(9), music: edge(3) });
+    if (down.some((d, k) => d && !prev[k])) music.start();
     padPrev[i] = down;
   }
 }
@@ -58,6 +62,8 @@ window.addEventListener('keydown', (e) => {
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
 });
 window.addEventListener('keyup', (e) => keysDown.delete(e.code));
+window.addEventListener('keydown', () => music.start(), { once: false });
+window.addEventListener('pointerdown', () => music.start());
 
 function keyboardInput() {
   const k = (c) => keysDown.has(c);
@@ -68,6 +74,7 @@ function keyboardInput() {
     b: keysHit.has('Escape') || keysHit.has('KeyB'),
     alt: keysHit.has('KeyX'),
     start: keysHit.has('Enter'),
+    music: keysHit.has('KeyM'),
   };
 }
 
@@ -845,7 +852,7 @@ function drawLobby() {
     `${ROUNDS_OPT || C.ROUNDS} rounds · each round: grab land → take turns buying and placing bots → production → trading floor`,
     'Every turn you eat tendies (3, later 5) and each non-fuel bot burns 1 fuel · run short and your turn gets shorter',
     'The Dip grows tendies · plains and craters pump fuel · ridges mine chips · diamonds are hidden until you assay',
-    'Keyboard: Space = A, B = B, Enter = Menu, arrows move · On Xbox, if the controllers do nothing, switch the browser to controller mode',
+    `Y or M toggles music${music.muted ? ' (muted)' : ''} · Keyboard: Space = A, B = B, Enter = Menu, arrows move · On Xbox, if the controllers do nothing, switch the browser to controller mode`,
   ];
   lines.forEach((l, k) => text(l, W / 2, 770 + k * 42, k === 3 ? 22 : 25, k === 3 ? '#7f8ba1' : '#c8d2e3', 'center', 500));
 }
@@ -865,6 +872,8 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   pollPads();
+  if (keyboardInput().music || padIn.some((p) => p && p.music)) music.toggleMute();
+  if (game) music.setIntensity(game.phase === 'auction' || game.phase === 'production' || game.phase === 'summary' ? 0.6 : 1);
 
   if (mode === 'lobby') {
     if (DEMO) {

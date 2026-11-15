@@ -9,7 +9,7 @@ A four-player couch economic strategy game for the browser, played with game con
 - AI-only demo: https://wellmanaz.github.io/tt/?demo
 - Shorter game: add `?rounds=6`
 
-Press A to join, Menu to start. Empty seats are played by Hedgies (AI).
+Press A to join, Menu to start. Empty seats are played by Hedgies (AI). Y (or M on a keyboard) toggles the music, which is an original loop synthesised in the browser (`js/music.js`).
 
 ## A round
 
