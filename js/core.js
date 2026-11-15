@@ -27,6 +27,7 @@ export const BOT_BASE = 100;
 export const OWN_BOT_FEE = 50; // assembly fee when building a bot from your own chips (option)
 export const PRICE_CAP = 265;
 export const AUCTION_TIME = 16;
+export const IDLE_CUTOFF = 3; // seconds of nobody moving before an auction wraps up
 export const PRICE_SPEED = 55; // dollars per second a bid or ask moves
 export const LAND_BID_SPEED = 160; // dollars per second a land bid moves
 export const LAND_TIME = 12;
@@ -419,6 +420,7 @@ function openLot(s) {
   L.leader = -1;
   L.result = '';
   L.sold = false;
+  L.idle = 0;
 }
 
 function updateLand(s, inputs, dt) {
@@ -440,6 +442,10 @@ function updateLand(s, inputs, dt) {
     });
     if (L.leader >= 0 && L.bids[L.leader] < lot.min) L.leader = -1;
     L.t -= dt;
+    // Nobody touching their bid for a few seconds ends it early.
+    const moving = s.players.some((p, i) => i !== lot.seller && Math.abs(inputs[i].y) > 0.1);
+    L.idle = moving ? 0 : L.idle + dt;
+    if (L.idle > IDLE_CUTOFF && L.t < LAND_TIME - 1) L.t = 0;
     // A late bid buys everyone a couple more seconds, a few times at most.
     if (leaderChanged && L.t < 2.5 && L.ext < 4) {
       L.t = 2.5;
@@ -952,6 +958,8 @@ function startAuction(s, gi) {
     bought: s.players.map(() => 0),
     sold: s.players.map(() => 0),
     bounced: s.players.map(() => null),
+    locked: s.players.map(() => false),
+    idle: 0,
     axisMax,
     lines: { buy: null, sell: null },
     trades: 0,
@@ -980,8 +988,11 @@ function updateAuction(s, inputs, dt) {
       const inp = inputs[i];
       if (inp.y < -0.5) a.roles[i] = 'buy';
       else if (inp.y > 0.5 && p.goods[good] > criticalLevel(s, i, good)) a.roles[i] = 'sell';
+      if (inp.a) a.locked[i] = true;
     });
     a.t -= dt;
+    const humans = s.players.filter((p) => p.kind === 'human');
+    if (humans.length && humans.every((p) => a.locked[p.index])) a.t = 0;
     if (a.t <= 0) {
       a.stage = 'trade';
       a.t = AUCTION_TIME;
@@ -1018,6 +1029,7 @@ function updateAuction(s, inputs, dt) {
     });
     a.lines = auctionLines(s, a);
 
+    let traded = false;
     a.tick += dt;
     while (a.tick >= 0.3) {
       a.tick -= 0.3;
@@ -1061,7 +1073,11 @@ function updateAuction(s, inputs, dt) {
       } else st.stock[good]--;
       a.trades++;
       a.sum += price;
+      traded = true;
     }
+    // Nobody moving and nothing trading? Wrap it up.
+    const moving = s.players.some((p, i) => a.active[i] && Math.abs(inputs[i].y) > 0.1);
+    a.idle = moving || traded ? 0 : a.idle + dt;
     // Sold out? Back to the top. Broke? Back to the bottom.
     s.players.forEach((p, i) => {
       if (!a.active[i]) return;
@@ -1082,7 +1098,7 @@ function updateAuction(s, inputs, dt) {
     const possible = (buyers && (sellers || storeSells)) || sellers;
     a.quiet = possible ? 0 : a.quiet + dt;
     a.t -= dt;
-    if (a.t <= 0 || a.quiet > 1) {
+    if (a.t <= 0 || a.quiet > 1 || a.idle > IDLE_CUTOFF) {
       a.stage = 'result';
       a.t = a.trades ? 2.5 : 1.2;
       settlePrices(s, a);

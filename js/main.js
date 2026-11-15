@@ -947,10 +947,10 @@ function drawAuction() {
       const y = role === 'buy' ? bottom - 130 : top + 60;
       drawWalker(x, y, PCOL[i], p.kind === 'ai', 1, p.char);
       text(p.name, x, y + 60, 24, '#f1f4f8', 'center');
-      text(role === 'buy' ? 'BUYING' : 'SELLING', x, y + 90, 26, role === 'buy' ? '#6be3a2' : '#ff8ad8', 'center', 800);
+      text((role === 'buy' ? 'BUYING' : 'SELLING') + (a.locked[i] ? ' ✓' : ''), x, y + 90, 26, role === 'buy' ? '#6be3a2' : '#ff8ad8', 'center', 800);
       text(`has ${p.goods[a.good]} · ${money(p.money)}`, x, y + 118, 20, '#9aa7bd', 'center', 500);
     });
-    text('Stick UP to be a buyer · stick DOWN to be a seller · everyone is on the floor', W / 2, 900, 28, '#9aa7bd', 'center', 500);
+    text('Stick UP to be a buyer · stick DOWN to be a seller · A when you are set', W / 2, 900, 28, '#9aa7bd', 'center', 500);
     return;
   }
 
@@ -1021,7 +1021,7 @@ function drawAuction() {
   else if (a.trades) label = `${a.trades} traded, average ${money(a.sum / a.trades)}`;
   else label = 'No trades';
   text(label, W / 2, 910, 30, '#fff', 'center', 800);
-  if (a.stage === 'trade') text('Buyers push UP, sellers push DOWN · when a buyer meets a seller, one unit trades per tick · sold out sends you to the top, broke to the bottom · stand still to do nothing · B steps off the floor', W / 2, 943, 20, '#9aa7bd', 'center', 500);
+  if (a.stage === 'trade') text('Buyers push UP, sellers push DOWN · when a buyer meets a seller, one unit trades per tick · sold out sends you to the top, broke to the bottom · if nobody moves for 3s the floor closes · B steps off', W / 2, 943, 20, '#9aa7bd', 'center', 500);
 }
 
 // ---------- report, summary, result ----------
@@ -1193,7 +1193,7 @@ function drawLand(now) {
 
   if (L.stage === 'bid') {
     text(`${Math.ceil(L.t)}s`, px + pw / 2, py + ph - 70, 44, L.t < 3 ? '#ff6b6b' : '#f1f4f8', 'center', 800);
-    text('Stick UP to raise your bid, DOWN to lower it · highest bid above the minimum when the clock runs out wins · a late bid adds time', px + pw / 2, py + ph - 28, 18, '#9aa7bd', 'center', 500);
+    text('Stick UP to raise your bid, DOWN to lower it · highest bid above the minimum wins · a late bid adds time · 3s of silence ends it', px + pw / 2, py + ph - 28, 18, '#9aa7bd', 'center', 500);
     landSfx = '';
   } else {
     if (landSfx !== `${L.idx}`) {
