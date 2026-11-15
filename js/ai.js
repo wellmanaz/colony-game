@@ -73,18 +73,18 @@ function steer(inp, fromX, fromY, toX, toY) {
   return d;
 }
 
-// Where to stand to enter a building: just inside its edge nearest the floor.
+// The counter at the back of a building's doorway.
 function entryOf(b) {
-  const top = b.y < 500;
-  return { x: b.x + b.w / 2, y: top ? b.y + b.h - 30 : b.y + 30 };
+  const d = C.doorOf(b);
+  return { x: d.x, y: b.row === 'top' ? b.y + b.h - C.TOWN.depth - 8 : b.y + C.TOWN.depth + 8 };
 }
 
-// In town, go via the corridor between the two rows so you don't wander
-// into the wrong shop.
+// In town, walk out to the street first, along it, then straight in
+// through the doorway, so you never try to push through a wall.
 function steerTown(inp, tu, goal) {
-  const CORRIDOR = 540;
-  if (Math.abs(tu.x - goal.x) > 60 && Math.abs(tu.y - CORRIDOR) > 20) return steer(inp, tu.x, tu.y, tu.x, CORRIDOR) + 1000;
-  if (Math.abs(tu.x - goal.x) > 60) return steer(inp, tu.x, tu.y, goal.x, CORRIDOR) + 1000;
+  const STREET = C.TOWN.street;
+  if (Math.abs(tu.x - goal.x) > 20 && Math.abs(tu.y - STREET) > 16) return steer(inp, tu.x, tu.y, tu.x, STREET) + 1000;
+  if (Math.abs(tu.x - goal.x) > 20) return steer(inp, tu.x, tu.y, goal.x, STREET) + 1000;
   return steer(inp, tu.x, tu.y, goal.x, goal.y);
 }
 
@@ -168,7 +168,7 @@ function walkTurn(s, seat, mem, inp, dt) {
       }
       const t = mem.targetTile >= 0 ? s.tiles[mem.targetTile] : null;
       const exitX = t && t.c < 5 ? C.TOWN.exitLeft - 20 : C.TOWN.exitRight + 20;
-      steerTown(inp, tu, { x: exitX, y: 540 });
+      steerTown(inp, tu, { x: exitX, y: C.TOWN.street });
       return;
     }
     if (tu.assay === 'have-sample') {
@@ -216,7 +216,7 @@ function walkTurn(s, seat, mem, inp, dt) {
     }
     if (tu.assay === 'need-sample') {
       const t = s.tiles[mem.assayTile];
-      steerTown(inp, tu, { x: t.c < 5 ? C.TOWN.exitLeft - 20 : C.TOWN.exitRight + 20, y: 540 });
+      steerTown(inp, tu, { x: t.c < 5 ? C.TOWN.exitLeft - 20 : C.TOWN.exitRight + 20, y: C.TOWN.street });
       return;
     }
     steerTown(inp, tu, entryOf(building('pub')));

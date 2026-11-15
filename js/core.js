@@ -58,28 +58,49 @@ export function characterOf(p) {
 // The Exchange buys anything offered at its price, but it can only sell
 // what it has actually been sold: run it dry and there is no ceiling.
 
-// Town interior. Buildings are touch zones; the walker enters one by
-// stepping into it. Doors are where the AI aims for.
+// Town interior. Storefronts line the top and bottom of a central street.
+// Each has one doorway facing the street; you walk in through it, deep
+// enough to reach the counter, and back out the same way. Walls are solid.
 export const TOWN = {
-  floorTop: 150,
-  floorBottom: 930,
+  floorTop: 170,
+  floorBottom: 910,
   exitLeft: 60,
   exitRight: 1860,
+  street: 540,
+  doorHalf: 48, // half the width of a doorway
+  depth: 72, // how far past the facade you must go to reach the counter
   buildings: [
-    { id: 'lot', name: 'Bot Lot', x: 110, y: 190, w: 300, h: 230 },
-    { id: 'shop0', name: 'The Fryer', x: 470, y: 190, w: 300, h: 230, outfit: 0 },
-    { id: 'shop1', name: 'Fuel Depot', x: 810, y: 190, w: 300, h: 230, outfit: 1 },
-    { id: 'shop2', name: 'Chip Fab', x: 1150, y: 190, w: 300, h: 230, outfit: 2 },
-    { id: 'shop3', name: 'Diamond Cutter', x: 1490, y: 190, w: 300, h: 230, outfit: 3 },
-    { id: 'assay', name: 'Assay Office', x: 470, y: 640, w: 300, h: 230 },
-    { id: 'land', name: 'Land Office', x: 810, y: 640, w: 300, h: 230 },
-    { id: 'pub', name: 'YOLO Bar', x: 1150, y: 640, w: 300, h: 230 },
+    { id: 'shop0', name: 'The Fryer', x: 120, y: 150, w: 330, h: 250, row: 'top', outfit: 0 },
+    { id: 'shop1', name: 'Fuel Depot', x: 570, y: 150, w: 330, h: 250, row: 'top', outfit: 1 },
+    { id: 'shop2', name: 'Chip Fab', x: 1020, y: 150, w: 330, h: 250, row: 'top', outfit: 2 },
+    { id: 'shop3', name: 'Diamond Cutter', x: 1470, y: 150, w: 330, h: 250, row: 'top', outfit: 3 },
+    { id: 'lot', name: 'Bot Lot', x: 120, y: 680, w: 330, h: 250, row: 'bottom' },
+    { id: 'assay', name: 'Assay Office', x: 570, y: 680, w: 330, h: 250, row: 'bottom' },
+    { id: 'land', name: 'Land Office', x: 1020, y: 680, w: 330, h: 250, row: 'bottom' },
+    { id: 'pub', name: 'YOLO Bar', x: 1470, y: 680, w: 330, h: 250, row: 'bottom' },
   ],
 };
-export const TOWN_START = { x: 960, y: 560 };
+export const TOWN_START = { x: 960, y: 540 };
 
 export function doorOf(b) {
-  return { x: b.x + b.w / 2, y: b.y + b.h + 34 };
+  return { x: b.x + b.w / 2, y: b.row === 'top' ? b.y + b.h : b.y };
+}
+
+// Inside a building's doorway channel (the only walkable part of it).
+export function inChannel(b, x, y) {
+  if (Math.abs(x - (b.x + b.w / 2)) > TOWN.doorHalf) return false;
+  return b.row === 'top' ? y >= b.y + 24 : y <= b.y + b.h - 24;
+}
+
+export function deepEnough(b, y) {
+  return b.row === 'top' ? y <= b.y + b.h - TOWN.depth : y >= b.y + TOWN.depth;
+}
+
+export function townBlocked(x, y) {
+  for (const b of TOWN.buildings) {
+    if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h && !inChannel(b, x, y)) return true;
+  }
+  return false;
 }
 
 export function foodNeed(round) {
@@ -669,11 +690,20 @@ function updateWalk(s, inputs, dt) {
   }
   const moving = mag > 0.1;
   tu.moving = moving;
+  const oldX = tu.x;
+  const oldY = tu.y;
   tu.x += ix * WALK_SPEED * dt;
   tu.y += iy * WALK_SPEED * dt;
   if (Math.abs(ix) > 0.1) tu.facing = ix > 0 ? 1 : -1;
 
   if (tu.scene === 'town') {
+    // Walls are solid: resolve each axis separately so you slide along them.
+    const nx = tu.x;
+    const ny = tu.y;
+    tu.x = oldX;
+    tu.y = oldY;
+    if (!townBlocked(nx, tu.y)) tu.x = nx;
+    if (!townBlocked(tu.x, ny)) tu.y = ny;
     tu.y = Math.max(TOWN.floorTop, Math.min(TOWN.floorBottom, tu.y));
     if (tu.x < TOWN.exitLeft) {
       tu.scene = 'map';
@@ -686,8 +716,10 @@ function updateWalk(s, inputs, dt) {
       tu.y = EXCHANGE_Y;
       tu.inBuilding = null;
     } else {
+      // Reaching the counter at the back of a doorway does the business;
+      // you have to leave the building before it will serve you again.
       const b = TOWN.buildings.find((bb) => tu.x >= bb.x && tu.x <= bb.x + bb.w && tu.y >= bb.y && tu.y <= bb.y + bb.h);
-      if (b && tu.inBuilding !== b.id) {
+      if (b && deepEnough(b, tu.y) && tu.inBuilding !== b.id) {
         tu.inBuilding = b.id;
         enterBuilding(s, tu, b);
       } else if (!b) tu.inBuilding = null;
@@ -703,7 +735,7 @@ function updateWalk(s, inputs, dt) {
     if (here && here.exchange) {
       tu.scene = 'town';
       tu.x = tu.x < EXCHANGE_X ? TOWN.exitLeft + 30 : TOWN.exitRight - 30;
-      tu.y = 540;
+      tu.y = TOWN.street;
       tu.bx = tu.x;
       tu.by = tu.y;
     } else if (inp.a && here) {

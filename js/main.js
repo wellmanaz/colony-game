@@ -347,6 +347,82 @@ const FOOD_SIGNS = [
   } },
 ];
 
+// Chip-maker knock-offs for chips plots. Same sign format as the food.
+const CHIP_SIGNS = [
+  { bg: '#0f6cbd', name: 'INTAPE', fg: '#fff', emblem: () => {
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(0, -2, 30, 16, -0.3, 0, 7); ctx.stroke();
+    text('intape', 0, -2, 16, '#fff', 'center', 800);
+  } },
+  { bg: '#1a1a1a', name: 'APD', fg: '#fff', emblem: () => {
+    ctx.fillStyle = '#fff'; ctx.fillRect(-26, -18, 20, 20); ctx.fillStyle = '#1a1a1a'; ctx.fillRect(-22, -14, 12, 12);
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.moveTo(-26, 2); ctx.lineTo(-6, 2); ctx.lineTo(-26, -18); ctx.fill();
+    text('APD', 10, -8, 18, '#fff', 'center', 800);
+  } },
+  { bg: '#1a1a1a', name: 'NVAPIA', fg: '#76b900', emblem: () => {
+    ctx.strokeStyle = '#76b900'; ctx.lineWidth = 5; ctx.beginPath(); ctx.ellipse(0, -4, 26, 14, 0, 0, 7); ctx.stroke();
+    ctx.fillStyle = '#76b900'; ctx.beginPath(); ctx.ellipse(-6, -4, 10, 7, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#1a1a1a'; ctx.beginPath(); ctx.ellipse(-4, -4, 4, 3, 0, 0, 7); ctx.fill();
+  } },
+  { bg: '#3253dc', name: 'QUALCOMMON', fg: '#fff', emblem: () => {
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(0, -6, 18, 0, 7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(10, 6); ctx.lineTo(22, 16); ctx.stroke();
+  } },
+  { bg: '#0091bd', name: 'APM', fg: '#fff', emblem: () => { text('apm', 0, -4, 30, '#fff', 'center', 800); } },
+  { bg: '#fff', name: 'TSMAPE', fg: '#d0302b', emblem: () => {
+    ctx.fillStyle = '#d0302b'; ctx.beginPath(); ctx.arc(-12, -4, 12, 0, 7); ctx.fill();
+    ctx.fillStyle = '#1e4fa3'; ctx.beginPath(); ctx.arc(8, -4, 12, 0, 7); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(-2, -4, 6, 0, 7); ctx.fill();
+  } },
+  { bg: '#1a1a1a', name: 'MICRAPE', fg: '#fff', emblem: () => {
+    ctx.fillStyle = '#fff'; rr(-28, -14, 56, 18, 4); ctx.fill();
+    ctx.fillStyle = '#1a1a1a'; for (let i = -22; i <= 22; i += 11) ctx.fillRect(i - 2, -10, 4, 10);
+  } },
+  { bg: '#cc092f', name: 'BROADCOMB', fg: '#fff', emblem: () => {
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 5; ctx.beginPath(); ctx.moveTo(-26, 8); ctx.lineTo(-10, -14); ctx.lineTo(4, 8); ctx.lineTo(18, -14); ctx.lineTo(28, 2); ctx.stroke();
+  } },
+  { bg: '#fff', name: 'TAPE INSTRUMENTS', fg: '#c8102e', emblem: () => {
+    ctx.fillStyle = '#c8102e'; ctx.beginPath(); ctx.moveTo(-24, -18); ctx.lineTo(0, -26); ctx.lineTo(24, -18); ctx.lineTo(24, 2); ctx.lineTo(0, 12); ctx.lineTo(-24, 2); ctx.closePath(); ctx.fill();
+    text('ti', 0, -6, 18, '#fff', 'center', 800);
+  } },
+  { bg: '#1428a0', name: 'SAMSAPE', fg: '#fff', emblem: () => {
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(0, -4, 32, 14, 0, 0, 7); ctx.stroke();
+    text('SAMSAPE', 0, -4, 10, '#fff', 'center', 800);
+  } },
+  { bg: '#fff', name: 'MICROCHIMP', fg: '#c8102e', emblem: () => {
+    // a chunky red M with a swoosh through it
+    ctx.fillStyle = '#c8102e'; ctx.beginPath(); ctx.moveTo(-28, 12); ctx.lineTo(-28, -18); ctx.lineTo(-16, -18); ctx.lineTo(0, 2); ctx.lineTo(16, -18); ctx.lineTo(28, -18); ctx.lineTo(28, 12); ctx.lineTo(18, 12); ctx.lineTo(18, -4); ctx.lineTo(0, 16); ctx.lineTo(-18, -4); ctx.lineTo(-18, 12); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(-30, 6); ctx.quadraticCurveTo(0, -10, 30, -22); ctx.stroke();
+  } },
+  { bg: '#2c2c2e', name: 'APEPLE SILICON', fg: '#fff', emblem: () => {
+    ctx.fillStyle = '#f2f2f2'; ctx.beginPath(); ctx.arc(-8, -2, 13, 0, 7); ctx.arc(8, -2, 13, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, 6, 17, 12, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = '#2c2c2e'; ctx.beginPath(); ctx.arc(18, -8, 5, 0, 7); ctx.fill();
+    ctx.fillStyle = '#f2f2f2'; ctx.beginPath(); ctx.ellipse(3, -20, 4, 7, 0.6, 0, 7); ctx.fill();
+  } },
+];
+
+function drawSignCard(sign, x, y, w, h) {
+  const k = Math.min(w, h) / 80;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(k, k);
+  ctx.fillStyle = sign.bg;
+  rr(-40, -34, 80, 68, 10);
+  ctx.fill();
+  ctx.save();
+  ctx.translate(0, -6);
+  ctx.scale(0.8, 0.8);
+  sign.emblem();
+  ctx.restore();
+  const size = sign.name.length > 11 ? 6.5 : 8.5;
+  text(sign.name, 0, 27, size, sign.fg, 'center', 800);
+  ctx.restore();
+}
+
+function drawChipSign(which, x, y, w, h) {
+  drawSignCard(CHIP_SIGNS[which % CHIP_SIGNS.length], x, y, w, h);
+}
+
 function drawFoodSign(which, x, y, w, h) {
   if (foodImages.length) {
     const img = foodImages[which % foodImages.length];
@@ -919,54 +995,196 @@ function drawGem(x, y, size, color) {
 
 // ---------- map ----------
 
+// Cheap deterministic noise per tile, so scatter detail stays put.
+function tileHash(t, n) {
+  let h = (t.c * 73856093) ^ (t.r * 19349663) ^ (n * 83492791);
+  h = (h ^ (h >>> 13)) * 1274126177;
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
 function paintTerrain(t, x, y, w, h) {
   const base = { plain: '#555b68', dip: '#2c6152', crater: '#474c59', ridge: '#655f6e' }[t.type];
   ctx.fillStyle = base;
   rr(x, y, w, h, 10);
   ctx.fill();
-
   ctx.save();
   rr(x, y, w, h, 10);
   ctx.clip();
-  if (t.type === 'dip') {
-    ctx.strokeStyle = '#3f8a72';
-    ctx.lineWidth = 5;
-    for (let k = 0; k < 3; k++) {
+
+  // ground texture: faint speckle on every tile
+  for (let i = 0; i < 14; i++) {
+    const px = x + tileHash(t, i) * w;
+    const py = y + tileHash(t, i + 40) * h;
+    const r = 1 + tileHash(t, i + 80) * 2.2;
+    ctx.fillStyle = tileHash(t, i + 120) > 0.5 ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.18)';
+    ctx.beginPath();
+    ctx.arc(px, py, r, 0, 7);
+    ctx.fill();
+  }
+
+  if (t.type === 'plain') {
+    // a few small rocks and a faint dust drift
+    for (let i = 0; i < 3; i++) {
+      const px = x + 20 + tileHash(t, i + 7) * (w - 40);
+      const py = y + 20 + tileHash(t, i + 17) * (h - 40);
+      const r = 4 + tileHash(t, i + 27) * 5;
+      ctx.fillStyle = '#464c58';
       ctx.beginPath();
-      ctx.moveTo(x, y + 34 + k * 34);
-      ctx.bezierCurveTo(x + w * 0.3, y + 14 + k * 34, x + w * 0.7, y + 54 + k * 34, x + w, y + 34 + k * 34);
+      ctx.ellipse(px, py, r, r * 0.6, 0, 0, 7);
+      ctx.fill();
+      ctx.fillStyle = '#6a7180';
+      ctx.beginPath();
+      ctx.ellipse(px - r * 0.2, py - r * 0.25, r * 0.5, r * 0.25, 0, 0, 7);
+      ctx.fill();
+    }
+    const g = ctx.createLinearGradient(x, y, x + w, y + h);
+    g.addColorStop(0, 'rgba(255,255,255,0.05)');
+    g.addColorStop(1, 'rgba(0,0,0,0.12)');
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, w, h);
+  } else if (t.type === 'dip') {
+    // a channel of water with banks, ripples and a glint
+    const g = ctx.createLinearGradient(x, y, x, y + h);
+    g.addColorStop(0, '#2b5f4e');
+    g.addColorStop(0.3, '#1d7a63');
+    g.addColorStop(0.5, '#2496a0');
+    g.addColorStop(0.7, '#1d7a63');
+    g.addColorStop(1, '#2b5f4e');
+    ctx.fillStyle = g;
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 3;
+    for (let k = 0; k < 3; k++) {
+      const yy = y + 40 + k * 28;
+      ctx.beginPath();
+      ctx.moveTo(x, yy);
+      ctx.bezierCurveTo(x + w * 0.3, yy - 10, x + w * 0.7, yy + 10, x + w, yy);
+      ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath();
+    ctx.ellipse(x + w * 0.65, y + h * 0.42, 14, 3, -0.2, 0, 7);
+    ctx.fill();
+    // green banks top and bottom
+    ctx.fillStyle = '#3f8a5a';
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + w, y);
+    ctx.lineTo(x + w, y + 14);
+    ctx.quadraticCurveTo(x + w / 2, y + 26, x, y + 14);
+    ctx.closePath();
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(x, y + h);
+    ctx.lineTo(x + w, y + h);
+    ctx.lineTo(x + w, y + h - 14);
+    ctx.quadraticCurveTo(x + w / 2, y + h - 26, x, y + h - 14);
+    ctx.closePath();
+    ctx.fill();
+    // tufts
+    ctx.strokeStyle = '#6fd08a';
+    ctx.lineWidth = 2;
+    for (let i = 0; i < 6; i++) {
+      const px = x + 10 + tileHash(t, i + 200) * (w - 20);
+      const py = tileHash(t, i + 210) > 0.5 ? y + 12 : y + h - 12;
+      ctx.beginPath();
+      ctx.moveTo(px, py);
+      ctx.lineTo(px - 3, py - 7);
+      ctx.moveTo(px, py);
+      ctx.lineTo(px + 3, py - 8);
       ctx.stroke();
     }
   } else if (t.type === 'crater') {
     [
-      [0.33, 0.4, 30],
-      [0.7, 0.66, 20],
+      [0.33, 0.42, 32],
+      [0.72, 0.68, 20],
+      [0.75, 0.22, 10],
     ].forEach(([fx, fy, r]) => {
-      ctx.fillStyle = '#343844';
+      const cx = x + w * fx;
+      const cy = y + h * fy;
+      // raised rim with a lit edge, dark bowl, shadowed far wall
+      ctx.fillStyle = '#5b616e';
       ctx.beginPath();
-      ctx.ellipse(x + w * fx, y + h * fy, r, r * 0.6, 0, 0, 7);
+      ctx.ellipse(cx, cy + 2, r * 1.18, r * 0.72, 0, 0, 7);
       ctx.fill();
-      ctx.strokeStyle = '#6b7282';
-      ctx.lineWidth = 3;
+      ctx.fillStyle = '#2c303a';
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, r, r * 0.6, 0, 0, 7);
+      ctx.fill();
+      const g = ctx.createRadialGradient(cx - r * 0.3, cy + r * 0.2, 1, cx, cy, r);
+      g.addColorStop(0, 'rgba(0,0,0,0)');
+      g.addColorStop(1, 'rgba(0,0,0,0.45)');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, r, r * 0.6, 0, 0, 7);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.ellipse(cx, cy, r, r * 0.6, 0, Math.PI * 1.05, Math.PI * 1.95);
       ctx.stroke();
     });
   } else if (t.type === 'ridge') {
+    // shaded peaks with snow caps and a ground shadow
     for (let k = 0; k < t.level; k++) {
-      const px = x + w * (0.25 + k * 0.25);
-      ctx.fillStyle = '#8b8496';
+      const px = x + w * (0.25 + k * 0.25) + (tileHash(t, k) - 0.5) * 10;
+      const top = y + 24 + tileHash(t, k + 5) * 12;
+      const baseY = y + h - 20;
+      ctx.fillStyle = 'rgba(0,0,0,0.25)';
       ctx.beginPath();
-      ctx.moveTo(px - 30, y + h - 22);
-      ctx.lineTo(px, y + 30);
-      ctx.lineTo(px + 30, y + h - 22);
+      ctx.ellipse(px + 4, baseY + 4, 34, 7, 0, 0, 7);
       ctx.fill();
-      ctx.fillStyle = '#b9b3c4';
+      // lit face
+      ctx.fillStyle = '#9a93a6';
       ctx.beginPath();
-      ctx.moveTo(px - 9, y + 54);
-      ctx.lineTo(px, y + 30);
-      ctx.lineTo(px + 9, y + 54);
+      ctx.moveTo(px - 32, baseY);
+      ctx.lineTo(px, top);
+      ctx.lineTo(px + 6, baseY);
       ctx.fill();
+      // shaded face
+      ctx.fillStyle = '#6e6779';
+      ctx.beginPath();
+      ctx.moveTo(px, top);
+      ctx.lineTo(px + 32, baseY);
+      ctx.lineTo(px + 6, baseY);
+      ctx.fill();
+      // snow cap
+      ctx.fillStyle = '#eef0f6';
+      ctx.beginPath();
+      ctx.moveTo(px, top);
+      ctx.lineTo(px - 9, top + 22);
+      ctx.lineTo(px - 4, top + 18);
+      ctx.lineTo(px, top + 24);
+      ctx.lineTo(px + 5, top + 17);
+      ctx.lineTo(px + 9, top + 22);
+      ctx.closePath();
+      ctx.fill();
+      // a seam of ore
+      ctx.strokeStyle = '#d9b84a';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(px - 12, baseY - 14);
+      ctx.lineTo(px - 4, baseY - 26);
+      ctx.lineTo(px + 2, baseY - 18);
+      ctx.stroke();
     }
   }
+  // bevel: light top-left edge, dark bottom-right
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(x + 10, y + 1);
+  ctx.lineTo(x + w - 10, y + 1);
+  ctx.moveTo(x + 1, y + 10);
+  ctx.lineTo(x + 1, y + h - 10);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+  ctx.beginPath();
+  ctx.moveTo(x + 10, y + h - 1);
+  ctx.lineTo(x + w - 10, y + h - 1);
+  ctx.moveTo(x + w - 1, y + 10);
+  ctx.lineTo(x + w - 1, y + h - 10);
+  ctx.stroke();
   ctx.restore();
   if (t.assayed) {
     for (let k = 0; k < 3; k++) drawGem(x + w - 18 - k * 20, y + 16, 8, k < t.dia ? '#c9a4ff' : 'rgba(0,0,0,0.35)');
@@ -1010,6 +1228,7 @@ function drawTile(t, now) {
     ctx.globalAlpha = 1;
   }
   if (t.bot === 0) drawFoodSign(C.tileIndex(t.c, t.r) * 7 + game.salt, x + w / 2, y + h / 2 + 4, 92, 78);
+  else if (t.bot === 2) drawChipSign(C.tileIndex(t.c, t.r) * 5 + game.salt, x + w / 2, y + h / 2 + 4, 92, 78);
   else if (t.bot >= 0) drawBot(x + w / 2, y + h / 2 + 12, t.bot, 1.05, { now });
 }
 
@@ -1064,73 +1283,151 @@ function drawMap(now) {
 function drawTown(now) {
   const tu = game.turn;
   const p = game.players[tu.seat];
-  ctx.fillStyle = '#141a27';
-  ctx.fillRect(0, C.TOWN.floorTop - 50, W, C.TOWN.floorBottom - C.TOWN.floorTop + 100);
-  ctx.strokeStyle = '#1f2838';
+  const T = C.TOWN;
+  // ground
+  ctx.fillStyle = '#12161f';
+  ctx.fillRect(0, 100, W, 860);
+  // the street: asphalt, kerbs, a dashed centre line
+  ctx.fillStyle = '#262c38';
+  ctx.fillRect(0, 400, W, 280);
+  ctx.fillStyle = '#3a4252';
+  ctx.fillRect(0, 400, W, 10);
+  ctx.fillRect(0, 670, W, 10);
+  ctx.strokeStyle = '#8a7b2e';
+  ctx.lineWidth = 4;
+  ctx.setLineDash([40, 30]);
+  ctx.beginPath();
+  ctx.moveTo(0, T.street);
+  ctx.lineTo(W, T.street);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // pavement slabs
+  ctx.strokeStyle = 'rgba(255,255,255,0.05)';
   ctx.lineWidth = 2;
-  for (let x = 0; x < W; x += 80) {
+  for (let x = 0; x < W; x += 60) {
     ctx.beginPath();
-    ctx.moveTo(x, C.TOWN.floorTop - 50);
-    ctx.lineTo(x, C.TOWN.floorBottom + 50);
+    ctx.moveTo(x, 100);
+    ctx.lineTo(x, 400);
+    ctx.moveTo(x, 680);
+    ctx.lineTo(x, 960);
     ctx.stroke();
   }
-  for (let y = C.TOWN.floorTop - 50; y < C.TOWN.floorBottom + 50; y += 80) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(W, y);
-    ctx.stroke();
-  }
+  // exits
   [
-    [C.TOWN.exitLeft - 40, '◀ OUT'],
-    [C.TOWN.exitRight + 40, 'OUT ▶'],
+    [T.exitLeft - 40, '◀ OUT'],
+    [T.exitRight + 40, 'OUT ▶'],
   ].forEach(([x, label]) => {
     ctx.fillStyle = '#0a0c13';
-    ctx.fillRect(x - 40, C.TOWN.floorTop, 80, C.TOWN.floorBottom - C.TOWN.floorTop);
-    text(label, x, 540, 26, '#7f8ba1', 'center', 800);
+    ctx.fillRect(x - 40, 400, 80, 280);
+    ctx.strokeStyle = '#3ddc84';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x - 38, 402, 76, 276);
+    text(label, x, T.street, 24, '#3ddc84', 'center', 800);
   });
 
   const price = C.botPrice(game);
-  C.TOWN.buildings.forEach((b) => {
+  T.buildings.forEach((b) => {
     const o = b.outfit !== undefined ? C.OUTFITS[b.outfit] : null;
     const col = o ? o.color : b.id === 'lot' ? '#cfd6e0' : b.id === 'pub' ? '#ff8ad8' : b.id === 'land' ? '#ffd84d' : '#c9a4ff';
-    ctx.fillStyle = '#1d2638';
-    rr(b.x, b.y, b.w, b.h, 16);
+    const top = b.row === 'top';
+    const door = C.doorOf(b);
+    const active = tu.inBuilding === b.id;
+
+    // body with panel lines
+    ctx.fillStyle = '#1b2232';
+    rr(b.x, b.y, b.w, b.h, 14);
     ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 2;
+    for (let yy = b.y + 20; yy < b.y + b.h; yy += 24) {
+      ctx.beginPath();
+      ctx.moveTo(b.x + 6, yy);
+      ctx.lineTo(b.x + b.w - 6, yy);
+      ctx.stroke();
+    }
+    // trim
     ctx.strokeStyle = col;
     ctx.lineWidth = 5;
+    rr(b.x, b.y, b.w, b.h, 14);
     ctx.stroke();
+    // sign band on the far side from the street
+    const bandY = top ? b.y : b.y + b.h - 56;
     ctx.fillStyle = col;
-    rr(b.x, b.y, b.w, 56, 16);
+    rr(b.x, bandY, b.w, 56, 14);
     ctx.fill();
-    ctx.fillRect(b.x, b.y + 30, b.w, 26);
-    text(b.name.toUpperCase(), b.x + b.w / 2, b.y + 29, 28, '#0a0c13', 'center', 800);
+    ctx.fillRect(b.x, top ? bandY + 30 : bandY, b.w, 26);
+    text(b.name.toUpperCase(), b.x + b.w / 2, bandY + 29, 26, '#0a0c13', 'center', 800);
+    // windows beside the door
+    ctx.fillStyle = active ? 'rgba(255,230,150,0.35)' : 'rgba(255,230,150,0.15)';
+    const wy = top ? b.y + 70 : b.y + b.h - 96;
+    [b.x + 24, b.x + 60, b.x + b.w - 84, b.x + b.w - 48].forEach((wx) => {
+      rr(wx, wy, 24, 26, 3);
+      ctx.fill();
+    });
+
+    // the doorway: a channel from the facade to the counter
+    const chX = door.x - T.doorHalf;
+    const chTop = top ? b.y + 56 : door.y;
+    const chH = b.h - 56;
+    ctx.fillStyle = '#0d1018';
+    ctx.fillRect(chX, chTop, T.doorHalf * 2, chH);
+    const glow = ctx.createLinearGradient(0, top ? b.y + 24 : b.y + b.h - 24, 0, top ? b.y + b.h : b.y);
+    glow.addColorStop(0, 'rgba(255,255,255,0.22)');
+    glow.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(chX, chTop, T.doorHalf * 2, chH);
+    // door frame posts
+    ctx.fillStyle = col;
+    ctx.fillRect(chX - 5, top ? b.y + b.h - 40 : b.y, 5, 40);
+    ctx.fillRect(chX + T.doorHalf * 2, top ? b.y + b.h - 40 : b.y, 5, 40);
+    // chevrons pointing in
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 3;
+    for (let k = 0; k < 3; k++) {
+      const yy = top ? b.y + b.h - 20 - k * 26 : b.y + 20 + k * 26;
+      const dir = top ? -1 : 1;
+      ctx.beginPath();
+      ctx.moveTo(door.x - 12, yy - dir * 6);
+      ctx.lineTo(door.x, yy + dir * 4);
+      ctx.lineTo(door.x + 12, yy - dir * 6);
+      ctx.stroke();
+    }
+    // the counter at the back of the channel
+    const counterY = top ? b.y + b.h - T.depth - 26 : b.y + T.depth + 6;
+    ctx.fillStyle = col;
+    rr(chX - 4, counterY, T.doorHalf * 2 + 8, 20, 6);
+    ctx.fill();
+
+    // left pane: what it costs; right pane: what you get
+    const lx = b.x + (chX - b.x) / 2;
+    const rx = chX + T.doorHalf * 2 + (b.x + b.w - chX - T.doorHalf * 2) / 2;
+    const midY = top ? b.y + 150 : b.y + b.h - 150;
     let l1 = '';
     let l2 = '';
     if (b.id === 'lot') {
-      l1 = price === null ? 'SOLD OUT' : `Bot: ${money(price)}`;
-      l2 = `${game.store.bots} in stock · return a bot here for a refund`;
-      drawBot(b.x + b.w / 2, b.y + 150, -1, 1.1, { now });
+      l1 = price === null ? 'SOLD OUT' : money(price);
+      l2 = `${game.store.bots} in stock`;
+      drawBot(rx, midY + 14, -1, 0.95, { now });
     } else if (o) {
-      l1 = `${o.tool}: ${money(o.cost)}`;
-      l2 = `makes ${o.name}`;
-      drawGoodIcon(o.id, b.x + 70, b.y + 140, o.id === 'diamonds' ? 52 : 56);
-      drawBot(b.x + b.w / 2 + 50, b.y + 150, b.outfit, 1.0, { now });
+      l1 = money(o.cost);
+      l2 = o.tool;
+      drawGoodIcon(o.id, rx, midY, o.id === 'diamonds' ? 40 : 46);
     } else if (b.id === 'assay') {
-      l1 = 'Check a plot for diamonds';
-      l2 = 'fetch a sample, bring it back';
-      drawGem(b.x + b.w / 2, b.y + 140, 30, '#c9a4ff');
+      l1 = 'FREE';
+      l2 = 'find diamonds';
+      drawGem(rx, midY, 26, '#c9a4ff');
     } else if (b.id === 'land') {
-      l1 = 'Sell a plot you own';
-      l2 = 'then press A on your plot';
-      text('🏷️', b.x + b.w / 2, b.y + 140, 54, '#fff', 'center');
+      l1 = 'SELL';
+      l2 = 'a plot you own';
+      text('🏷️', rx, midY, 40, '#fff', 'center');
     } else if (b.id === 'pub') {
-      const base = 50 + (game.round - 1) * 18;
-      l1 = 'YOLO the rest of your turn';
-      l2 = `up to ${money(base)} · the sooner, the more`;
-      text('🍺', b.x + b.w / 2, b.y + 140, 60, '#fff', 'center');
+      const base = (50 + (game.round - 1) * 18) * C.characterOf(p).swing;
+      l1 = `≤ ${money(base)}`;
+      l2 = 'ends your turn';
+      text('🍺', rx, midY, 44, '#fff', 'center');
     }
-    text(l1, b.x + b.w / 2, b.y + 80, 24, '#f1f4f8', 'center');
-    text(l2, b.x + b.w / 2, b.y + b.h - 22, 17, '#9aa7bd', 'center', 500);
+    text(l1, lx, midY - 12, 24, '#f1f4f8', 'center', 800);
+    text(l2, lx, midY + 16, 15, '#9aa7bd', 'center', 500);
   });
 
   if (tu.hasBot) drawBot(tu.bx, tu.by, tu.outfit, 0.9, { now, moving: tu.moving, facing: tu.facing });
@@ -1230,8 +1527,8 @@ function drawAuction() {
   const sellText = sells ? `sells at ${money(st.sell[a.good])}` : 'has NOTHING to sell — no ceiling';
   text(`The Exchange ${stockText} · ${sellText} · buys at ${money(st.buy[a.good])}`, W / 2, 205, 26, sells ? '#c8d2e3' : '#ffd84d', 'center', 500);
 
-  const top = 345;
-  const bottom = 840;
+  const top = 372;
+  const bottom = 850;
   const yOf = (price) => bottom - (price / a.axisMax) * (bottom - top);
   const colX = (i) => 480 + i * 320;
 
@@ -1297,6 +1594,7 @@ function drawAuction() {
 
   // Everyone keeps their own column; buyers rise from the bottom, sellers
   // drop from the top.
+  const vel = auctionVelocity(a, performance.now());
   game.players.forEach((p, i) => {
     const x = colX(i);
     const role = a.roles[i];
@@ -1305,9 +1603,9 @@ function drawAuction() {
     ctx.globalAlpha = a.active[i] ? 1 : 0.4;
     ctx.fillStyle = PCOL[i];
     ctx.fillRect(x - 50, y - 3, 100, 6);
-    drawWalker(x, buyer ? y + 30 : y - 30, PCOL[i], p.kind === 'ai', 1, p.char, performance.now());
+    drawTrader(p, i, x, y, buyer, a.active[i] ? vel[i] : 0, a.active[i], !!a.bounced[i], performance.now());
     // Sellers parked at the very top get their tag below the line instead.
-    const tagY = buyer ? y + 82 : a.price[i] > a.axisMax * 0.85 ? y + 22 : y - 86;
+    const tagY = buyer ? y + 22 : y - 82;
     text(money(a.price[i]), x, tagY, 22, '#fff', 'center', 800);
     const status = a.bounced[i] || (a.active[i] ? '' : 'stepped off');
     text(status ? `${p.name} · ${status}` : p.name, x, tagY + 24, 16, '#c8d2e3', 'center', 500);
@@ -1442,6 +1740,92 @@ function drawGoodChart(gi, age, top, bottom) {
   text(stage === 2 ? 'A to open the floor' : '', W / 2, 910, 26, '#f1f4f8', 'center', 800);
 }
 
+// Price movement per seat, smoothed, so the characters can react to it.
+const aucPrev = { key: '', price: [0, 0, 0, 0], vel: [0, 0, 0, 0], t: 0 };
+function auctionVelocity(a, now) {
+  const key = `${game.round}:${a.gi}`;
+  const dt = Math.max(0.001, (now - aucPrev.t) / 1000);
+  if (aucPrev.key !== key) {
+    aucPrev.key = key;
+    aucPrev.price = a.price.slice();
+    aucPrev.vel = a.price.map(() => 0);
+  } else {
+    a.price.forEach((pr, i) => {
+      const v = (pr - aucPrev.price[i]) / dt;
+      aucPrev.vel[i] += (v - aucPrev.vel[i]) * Math.min(1, dt * 8);
+      aucPrev.price[i] = pr;
+    });
+  }
+  aucPrev.t = now;
+  return aucPrev.vel;
+}
+
+// A trader on the floor: hovering when still, jetpacking up when raising,
+// parachuting down when lowering, and spinning off when bounced.
+function drawTrader(p, i, x, y, buyer, vel, active, bounced, now) {
+  const up = vel > 4;
+  const down = vel < -4;
+  const hover = Math.sin(now / 260 + i) * 3;
+  ctx.save();
+  ctx.translate(x, y + (up || down ? 0 : hover));
+  if (bounced) {
+    // tumbling off the floor
+    ctx.translate(0, -34);
+    ctx.rotate(Math.sin(now / 150 + i) * 0.5 + (buyer ? 2.8 : -2.8));
+    drawCharacter(p.char, 0, 34, 1, PCOL[i], 1, now, true);
+    ctx.restore();
+    ['✦', '✧', '✦'].forEach((s, k) => text(s, x - 26 + k * 26, y - 58 + Math.sin(now / 120 + k) * 6, 20, '#ffd84d', 'center', 800));
+    return;
+  }
+  if (up) {
+    // jetpack: flames under the feet, lean back a bit
+    ctx.rotate(-0.12);
+    const f = 1 + Math.sin(now / 40) * 0.3;
+    [-10, 10].forEach((fx) => {
+      ctx.fillStyle = '#ff8a00';
+      ctx.beginPath();
+      ctx.moveTo(fx - 7, 0);
+      ctx.lineTo(fx, 26 * f);
+      ctx.lineTo(fx + 7, 0);
+      ctx.fill();
+      ctx.fillStyle = '#ffe066';
+      ctx.beginPath();
+      ctx.moveTo(fx - 3, 0);
+      ctx.lineTo(fx, 14 * f);
+      ctx.lineTo(fx + 3, 0);
+      ctx.fill();
+    });
+    ctx.fillStyle = '#6b7384';
+    rr(-18, -32, 36, 30, 6);
+    ctx.fill();
+    drawCharacter(p.char, 0, 0, 1, PCOL[i], 1, now, true);
+  } else if (down) {
+    // parachute in the player's colour, legs kicking
+    ctx.fillStyle = PCOL[i];
+    ctx.beginPath();
+    ctx.arc(0, -104, 44, Math.PI, 0);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath();
+    ctx.arc(-14, -104, 12, Math.PI, 0);
+    ctx.fill();
+    ctx.strokeStyle = '#c8d2e3';
+    ctx.lineWidth = 1.5;
+    [-40, -14, 14, 40].forEach((lx) => {
+      ctx.beginPath();
+      ctx.moveTo(lx, -104);
+      ctx.lineTo(0, -64);
+      ctx.stroke();
+    });
+    ctx.rotate(Math.sin(now / 200) * 0.08);
+    drawCharacter(p.char, 0, 0, 1, PCOL[i], 1, now, true);
+  } else {
+    drawCharacter(p.char, 0, 0, 1, PCOL[i], 1, now, false);
+  }
+  ctx.restore();
+  void active;
+}
+
 let landSfx = '';
 function drawLand(now) {
   const L = game.land;
@@ -1472,6 +1856,7 @@ function drawLand(now) {
   ctx.scale(2, 2);
   paintTerrain(t, 0, 0, C.TILE_W - 6, C.TILE_H - 6);
   if (t.bot === 0) drawFoodSign(lot.tile * 7 + game.salt, (C.TILE_W - 6) / 2, (C.TILE_H - 6) / 2 + 4, 92, 78);
+  else if (t.bot === 2) drawChipSign(lot.tile * 5 + game.salt, (C.TILE_W - 6) / 2, (C.TILE_H - 6) / 2 + 4, 92, 78);
   else if (t.bot >= 0) drawBot((C.TILE_W - 6) / 2, (C.TILE_H - 6) / 2 + 12, t.bot, 1.05, { now });
   ctx.restore();
   const kind = { plain: 'Plains', dip: 'The Dip', crater: 'Crater', ridge: `Ridge, ${t.level} peak${t.level > 1 ? 's' : ''}` }[t.type];
@@ -1673,7 +2058,8 @@ function drawLobby() {
   drawBackground();
   if (PARAMS.has('signs')) {
     // debug: every fast-food sign at tile size
-    FOOD_SIGNS.forEach((sg, i) => drawFoodSign(i, 160 + (i % 7) * 240, 160 + Math.floor(i / 7) * 220, 184, 156));
+    FOOD_SIGNS.forEach((sg, i) => drawFoodSign(i, 160 + (i % 8) * 220, 120 + Math.floor(i / 8) * 190, 160, 136));
+    CHIP_SIGNS.forEach((sg, i) => drawChipSign(i, 160 + (i % 8) * 220, 720 + Math.floor(i / 8) * 190, 160, 136));
     return;
   }
   text('TENDIE TOWN', W / 2, 110, 100, '#3ddc84', 'center', 800);
@@ -1769,9 +2155,10 @@ function frame(now) {
       };
       if (UNTIL) {
         const [ph, st] = UNTIL.split(':');
+        const minRound = Number(PARAMS.get('round')) || 1;
         let guard = 0;
-        while (guard++ < 60 * 60 * 30 && game.phase !== 'over') {
-          if (game.phase === ph && (!st || (game.auction && game.auction.stage === st))) break;
+        while (guard++ < 60 * 60 * 60 && game.phase !== 'over') {
+          if (game.round >= minRound && game.phase === ph && (!st || (game.auction && game.auction.stage === st))) break;
           tick();
         }
       }
