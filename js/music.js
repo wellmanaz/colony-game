@@ -72,6 +72,16 @@ export class Music {
     this.timer = null;
     this.intensity = 1;
     this.paused = false;
+    this.custom = null; // an <audio> element playing a track the player supplied
+  }
+
+  // Play a track from a URL the player chose instead of the built-in loop.
+  useTrack(url) {
+    const el = new Audio(url);
+    el.loop = true;
+    el.volume = 0.5;
+    el.preload = 'auto';
+    this.custom = el;
   }
 
   // Must be called from a user gesture the first time.
@@ -91,6 +101,11 @@ export class Music {
     }
     if (this.ctx.state === 'suspended') this.ctx.resume();
     this.playing = true;
+    if (this.custom) {
+      this.custom.muted = this.muted;
+      if (!this.paused) this.custom.play().catch(() => {});
+      return;
+    }
     this.step = 0;
     this.nextTime = this.ctx.currentTime + 0.1;
     if (!this.paused) this.timer = setInterval(() => this.schedule(), 40);
@@ -99,6 +114,7 @@ export class Music {
   toggleMute() {
     this.muted = !this.muted;
     if (this.master) this.master.gain.setTargetAtTime(this.muted ? 0 : 0.5, this.ctx.currentTime, 0.05);
+    if (this.custom) this.custom.muted = this.muted;
     return this.muted;
   }
 
@@ -111,7 +127,11 @@ export class Music {
   setPaused(p) {
     if (this.paused === p) return;
     this.paused = p;
-    if (!this.ctx) return;
+    if (this.custom && this.playing) {
+      if (p) this.custom.pause();
+      else this.custom.play().catch(() => {});
+    }
+    if (!this.ctx || this.custom) return;
     if (p) {
       clearInterval(this.timer);
       this.timer = null;

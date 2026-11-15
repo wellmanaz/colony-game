@@ -11,6 +11,8 @@ A four-player couch economic strategy game for the browser, played with game con
 
 Press A to join, Menu to start. Empty seats are played by Hedgies (AI). Y (or M on a keyboard) toggles the music, which is an original loop synthesised in the browser (`js/music.js`).
 
+To play your own music instead, add `?music=` followed by the address of an audio file you host yourself, e.g. `https://wellmanaz.github.io/tt/?music=https://example.com/theme.mp3`. The game loops it and pauses it during auctions. No music files are stored in this repository.
+
 ## A round
 
 1. **Land grab** — a scanner sweeps the plots; press A to claim the one it's on. One free plot each per round.
