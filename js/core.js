@@ -229,6 +229,7 @@ export function ranking(s) {
 // The amount of a good a player must keep: next round's food, and fuel
 // for every bot that burns it.
 export function criticalLevel(s, seat, good) {
+  if (!s.protect) return 0;
   if (good === 'tendies') return foodNeed(s.round + 1);
   if (good === 'fuel') return nonFuelBots(s, seat);
   return 0;
@@ -239,6 +240,7 @@ export function newGame(seatDefs, rng = Math.random, opts = {}) {
   const s = {
     rng,
     rounds: opts.rounds || ROUNDS,
+    protect: !!opts.protect, // stop players selling the tendies and fuel they need
     tiles: makeMap(rng),
     players: seatDefs.map((d, i) => ({
       index: i,
@@ -737,13 +739,15 @@ function startAuction(s, gi) {
   s.phase = 'auction';
   const good = GOODS[gi];
   const allAI = s.players.every((p) => p.kind === 'ai');
-  const axisMax = Math.max(150, Math.ceil((s.store.sell[good] * 2) / 50) * 50);
+  const dry = good === 'diamonds' || s.store.stock[good] <= 0;
+  const axisMax = Math.min(400, dry ? Math.max(300, Math.ceil((s.store.sell[good] * 3) / 50) * 50) : Math.max(150, Math.ceil((s.store.sell[good] * 2) / 50) * 50));
   s.auction = {
     gi,
     good,
     stage: 'declare',
     t: allAI ? 0.5 : 6,
-    roles: s.players.map(() => 'none'),
+    // Everyone is on the floor: you start as a seller if you have some, else a buyer.
+    roles: s.players.map((p, i) => (p.goods[good] > criticalLevel(s, i, good) ? 'sell' : 'buy')),
     price: s.players.map(() => 0),
     active: s.players.map(() => false),
     bought: s.players.map(() => 0),
@@ -765,22 +769,17 @@ function updateAuction(s, inputs, dt) {
   if (a.stage === 'declare') {
     s.players.forEach((p, i) => {
       const inp = inputs[i];
-      if (inp.y < -0.5 && p.money >= 1) a.roles[i] = 'buy';
+      if (inp.y < -0.5) a.roles[i] = 'buy';
       else if (inp.y > 0.5 && p.goods[good] > criticalLevel(s, i, good)) a.roles[i] = 'sell';
-      else if (inp.b) a.roles[i] = 'none';
     });
     a.t -= dt;
     if (a.t <= 0) {
       a.stage = 'trade';
       a.t = AUCTION_TIME;
       s.players.forEach((p, i) => {
-        a.active[i] = a.roles[i] !== 'none';
-        a.price[i] = a.roles[i] === 'buy' ? 0 : a.roles[i] === 'sell' ? a.axisMax : 0;
+        a.active[i] = true;
+        a.price[i] = a.roles[i] === 'buy' ? 0 : a.axisMax;
       });
-      if (!a.active.some((x) => x)) {
-        a.stage = 'result';
-        a.t = 1.2;
-      }
     }
     return;
   }
@@ -948,8 +947,12 @@ function startSummary(s) {
     }
   });
   // The Exchange's perishables rot too.
+  const storeSpoiled = { tendies: 0, fuel: 0 };
   ['tendies', 'fuel'].forEach((g) => {
-    if (s.store.stock[g] > 30) s.store.stock[g] -= Math.floor((s.store.stock[g] - 30) / 2);
+    if (s.store.stock[g] > 30) {
+      storeSpoiled[g] = Math.floor((s.store.stock[g] - 30) / 2);
+      s.store.stock[g] -= storeSpoiled[g];
+    }
   });
   // The Exchange builds bots from chips (2 each), plus one shipment a round.
   const builds = Math.min(2, Math.floor(s.store.stock.chips / 2));
@@ -962,6 +965,7 @@ function startSummary(s) {
     rows: ranks.map((p) => ({ seat: p.index, worth: netWorth(s, p), spoiled: spoiled[p.index] })),
     colony: s.players.reduce((n, p) => n + netWorth(s, p), 0),
     botsBuilt: builds,
+    storeSpoiled,
   };
 }
 

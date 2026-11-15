@@ -12,7 +12,7 @@ const PARAMS = new URLSearchParams(location.search);
 const DEMO = PARAMS.has('demo'); // AI-only game that starts by itself
 const SKIP = Number(PARAMS.get('skip')) || 0; // demo only: seconds to fast-forward at start
 const UNTIL = PARAMS.get('until') || ''; // demo only: fast-forward until a phase (e.g. auction:trade), then SKIP more seconds
-const ROUNDS_OPT = Number(PARAMS.get('rounds')) || 0;
+const opts = { rounds: Number(PARAMS.get('rounds')) === 6 ? 6 : 12, protect: PARAMS.has('protect') };
 
 const music = new Music();
 
@@ -49,7 +49,7 @@ function pollPads() {
     if (down[15]) x = 1;
     if (down[12]) y = -1;
     if (down[13]) y = 1;
-    padIn.push({ x, y, a: edge(0), b: edge(1), alt: edge(2), start: edge(9), music: edge(3) });
+    padIn.push({ x, y, a: edge(0), b: edge(1), alt: edge(2), start: edge(9), music: edge(3), lb: edge(4) });
     if (down.some((d, k) => d && !prev[k])) music.start();
     padPrev[i] = down;
   }
@@ -76,6 +76,7 @@ function keyboardInput() {
     alt: keysHit.has('KeyX'),
     start: keysHit.has('Enter'),
     music: keysHit.has('KeyM'),
+    lb: keysHit.has('KeyP'),
   };
 }
 
@@ -99,8 +100,12 @@ function updateLobby() {
     }
     if (p.b && seat >= 0) lobby[seat] = null;
     if (p.start) start = true;
+    if (p.alt) opts.rounds = opts.rounds === 12 ? 6 : 12;
+    if (p.lb) opts.protect = !opts.protect;
   });
   const kb = keyboardInput();
+  if (kb.alt) opts.rounds = opts.rounds === 12 ? 6 : 12;
+  if (kb.lb) opts.protect = !opts.protect;
   const kbSeat = lobby.findIndex((s) => s && s.src === 'kbd');
   if (kb.a && kbSeat < 0) {
     const free = lobby.indexOf(null);
@@ -119,7 +124,7 @@ function startGame() {
     s ? { kind: 'human', name: `Ape ${++apes}` } : { kind: 'ai', name: `Hedgie ${++hedgies}` }
   );
   ais = seats.map(() => makeAI());
-  game = C.newGame(defs, Math.random, { rounds: ROUNDS_OPT || undefined });
+  game = C.newGame(defs, Math.random, opts);
   mode = 'game';
   overTimer = 0;
 }
@@ -595,16 +600,13 @@ function drawAuction() {
     game.players.forEach((p, i) => {
       const x = colX(i);
       const role = a.roles[i];
-      const y = role === 'buy' ? bottom - 40 : role === 'sell' ? top + 60 : (top + bottom) / 2;
-      ctx.globalAlpha = role === 'none' ? 0.4 : 1;
+      const y = role === 'buy' ? bottom - 130 : top + 60;
       drawWalker(x, y, PCOL[i], p.kind === 'ai', 1);
       text(p.name, x, y + 60, 24, '#f1f4f8', 'center');
-      const label = role === 'buy' ? 'BUYING' : role === 'sell' ? 'SELLING' : 'sitting out';
-      text(label, x, y + 90, 26, role === 'buy' ? '#6be3a2' : role === 'sell' ? '#ff8ad8' : '#7f8ba1', 'center', 800);
+      text(role === 'buy' ? 'BUYING' : 'SELLING', x, y + 90, 26, role === 'buy' ? '#6be3a2' : '#ff8ad8', 'center', 800);
       text(`has ${p.goods[a.good]} · ${money(p.money)}`, x, y + 118, 20, '#9aa7bd', 'center', 500);
-      ctx.globalAlpha = 1;
     });
-    text('Stick UP to buy · stick DOWN to sell · B to sit out', W / 2, 900, 28, '#9aa7bd', 'center', 500);
+    text('Stick UP to be a buyer · stick DOWN to be a seller · everyone is on the floor', W / 2, 900, 28, '#9aa7bd', 'center', 500);
     return;
   }
 
@@ -654,13 +656,6 @@ function drawAuction() {
   game.players.forEach((p, i) => {
     const x = colX(i);
     const role = a.roles[i];
-    if (role === 'none') {
-      ctx.globalAlpha = 0.25;
-      drawWalker(x, (top + bottom) / 2, PCOL[i], p.kind === 'ai', 1);
-      text(`${p.name} · out`, x, (top + bottom) / 2 + 56, 16, '#c8d2e3', 'center', 500);
-      ctx.globalAlpha = 1;
-      return;
-    }
     const buyer = role === 'buy';
     const y = yOf(a.price[i]);
     ctx.globalAlpha = a.active[i] ? 1 : 0.4;
@@ -669,7 +664,7 @@ function drawAuction() {
     drawWalker(x, buyer ? y + 30 : y - 30, PCOL[i], p.kind === 'ai', 1);
     const tagY = buyer ? y + 82 : y - 86;
     text(money(a.price[i]), x, tagY, 22, '#fff', 'center', 800);
-    const status = a.bounced[i] || (a.active[i] ? '' : 'done');
+    const status = a.bounced[i] || (a.active[i] ? '' : 'stepped off');
     text(status ? `${p.name} · ${status}` : p.name, x, tagY + 24, 16, '#c8d2e3', 'center', 500);
     const n = buyer ? a.bought[i] : a.sold[i];
     if (n) text(buyer ? `+${n}` : `−${n}`, x + 70, buyer ? y + 30 : y - 30, 24, buyer ? '#6be3a2' : '#ff8ad8', 'center', 800);
@@ -681,7 +676,7 @@ function drawAuction() {
   else if (a.trades) label = `${a.trades} traded, average ${money(a.sum / a.trades)}`;
   else label = 'No trades';
   text(label, W / 2, 910, 30, '#fff', 'center', 800);
-  if (a.stage === 'trade') text('Buyers push UP, sellers push DOWN · when a buyer meets a seller, one unit trades per tick · sold out sends you to the top, broke to the bottom · B to stop', W / 2, 943, 20, '#9aa7bd', 'center', 500);
+  if (a.stage === 'trade') text('Buyers push UP, sellers push DOWN · when a buyer meets a seller, one unit trades per tick · sold out sends you to the top, broke to the bottom · stand still to do nothing · B steps off the floor', W / 2, 943, 20, '#9aa7bd', 'center', 500);
 }
 
 // ---------- report, summary, result ----------
@@ -746,7 +741,20 @@ function drawSummary() {
     y += 88;
   });
   text(`The Exchange built ${sm.botsBuilt} bot${sm.botsBuilt === 1 ? '' : 's'} from chips · Bot Lot now has ${game.store.bots}`, W / 2, 700, 24, '#c8d2e3', 'center', 500);
-  text('Poorest player goes first next round', W / 2, 740, 22, '#9aa7bd', 'center', 500);
+  const ss = sm.storeSpoiled || {};
+  const rotted = [];
+  if (ss.tendies) rotted.push(`${ss.tendies} tendies went stale`);
+  if (ss.fuel) rotted.push(`${ss.fuel} fuel leaked`);
+  text(
+    rotted.length ? `In the Exchange's warehouse ${rotted.join(' and ')} · it now holds ${game.store.stock.tendies} tendies, ${game.store.stock.fuel} fuel, ${game.store.stock.chips} chips` : `The Exchange holds ${game.store.stock.tendies} tendies, ${game.store.stock.fuel} fuel, ${game.store.stock.chips} chips`,
+    W / 2,
+    770,
+    22,
+    rotted.length ? '#ff8ad8' : '#9aa7bd',
+    'center',
+    500
+  );
+  text('Poorest player goes first next round', W / 2, 735, 22, '#9aa7bd', 'center', 500);
   text(`A to continue (${Math.ceil(sm.t)})`, W / 2, 920, 22, '#9aa7bd', 'center', 500);
 }
 
@@ -865,12 +873,13 @@ function drawLobby() {
       text('or a Hedgie plays this seat', x + 192, y + 255, 24, '#9aa7bd', 'center', 500);
     }
   }
-  text('Press the Menu button to start', W / 2, 690, 44, '#ffffff', 'center', 800);
+  text('Press the Menu button to start', W / 2, 670, 44, '#ffffff', 'center', 800);
+  text(`X: ${opts.rounds} rounds (${opts.rounds === 12 ? 'full game' : 'short game'})   ·   LB: starvation protection ${opts.protect ? 'ON — you cannot sell food and fuel you need' : 'OFF — sell whatever you like, go hungry if you must'}`, W / 2, 722, 24, '#ffd84d', 'center', 600);
   const lines = [
-    `${ROUNDS_OPT || C.ROUNDS} rounds · each round: grab land → take turns buying and placing bots → production → trading floor`,
+    'Each round: grab land → take turns buying and placing bots → production → trading floor',
     'Every turn you eat tendies (3, later 5) and each non-fuel bot burns 1 fuel · run short and your turn gets shorter',
     'The Dip grows tendies · plains and craters pump fuel · ridges mine chips · diamonds are hidden until you assay',
-    `Y or M toggles music${music.muted ? ' (muted)' : ''} · Keyboard: Space = A, B = B, Enter = Menu, arrows move · On Xbox, if the controllers do nothing, switch the browser to controller mode`,
+    `Y or M toggles music${music.muted ? ' (muted)' : ''} · Keyboard: Space = A, B = B, X = X, P = LB, Enter = Menu, arrows move · On Xbox, if the controllers do nothing, switch the browser to controller mode`,
   ];
   lines.forEach((l, k) => text(l, W / 2, 770 + k * 42, k === 3 ? 22 : 25, k === 3 ? '#7f8ba1' : '#c8d2e3', 'center', 500));
 }
