@@ -1928,12 +1928,9 @@ function drawTrader(p, i, x, y, buyer, vel, active, bounced, now) {
   ctx.save();
   ctx.translate(x, y + (up || down ? 0 : hover));
   if (bounced) {
-    // tumbling off the floor
-    ctx.translate(0, -34);
-    ctx.rotate(Math.sin(now / 150 + i) * 0.5 + (buyer ? 2.8 : -2.8));
-    drawCharacter(p.char, 0, 34, 1, PCOL[i], 1, now, true);
+    // back at the top (sold out) or the bottom (broke), standing quietly
+    drawCharacter(p.char, 0, 0, 1, PCOL[i], 1, now, false);
     ctx.restore();
-    ['✦', '✧', '✦'].forEach((s, k) => text(s, x - 26 + k * 26, y - 58 + Math.sin(now / 120 + k) * 6, 20, '#ffd84d', 'center', 800));
     return;
   }
   if (up) {
