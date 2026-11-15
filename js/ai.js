@@ -35,7 +35,7 @@ function outfitValue(s, tile, outfit, seat) {
   const y = knownYield(s, tile, outfit, seat);
   const g = C.OUTFITS[outfit].id;
   let v = y * (s.store.sell[g] + s.store.buy[g]) * 0.5;
-  if (outfit === 0 && y >= 2 && myProduction(s, seat, 0) < C.foodNeed(s.round + 1)) v *= 2.2;
+  if (outfit === 0 && y >= 2 && myProduction(s, seat, 0) < C.foodNeedFor(s, s.players[seat], s.round + 1)) v *= 2.2;
   if (outfit === 1 && y >= 2 && myProduction(s, seat, 1) < C.nonFuelBots(s, seat) + 1) v *= 2;
   return v;
 }
@@ -177,10 +177,11 @@ function walkTurn(s, seat, mem, inp, dt) {
     }
     const target = pickTargetPlot(s, seat);
     let price = C.botPrice(s);
+    if (price !== null) price = C.shopPrice(p, price);
     if (price === null && s.ownBots && p.goods.chips >= 2) price = C.OWN_BOT_FEE;
     if (target && price !== null) {
       // Keep a little cash back for food at the auction.
-      const outfit = chooseOutfit(s, target, seat, p.money - price - 120);
+      const outfit = chooseOutfit(s, target, seat, (p.money - price - 120) / (C.characterOf(p).shopMult || 1));
       const c = C.tileCenter(target);
       // Lot, shop, exit, then the walk out: about 2600px of town plus the map leg.
       const est = (2600 + Math.hypot(c.x - C.EXCHANGE_X, c.y - C.EXCHANGE_Y)) / C.WALK_SPEED + 3;
@@ -217,6 +218,11 @@ function walkTurn(s, seat, mem, inp, dt) {
     if (tu.assay === 'need-sample') {
       const t = s.tiles[mem.assayTile];
       steerTown(inp, tu, { x: t.c < 5 ? C.TOWN.exitLeft - 20 : C.TOWN.exitRight + 20, y: C.TOWN.street });
+      return;
+    }
+    // Nothing left to do: Degens skip the coin-flip bar and just end the turn.
+    if (C.characterOf(p).swing > 1) {
+      inp.b = true;
       return;
     }
     steerTown(inp, tu, entryOf(building('pub')));
@@ -295,7 +301,7 @@ function auctionTurn(s, seat, mem, inp, dt) {
     let want = 0;
     const have = p.goods[good];
     if (good === 'tendies') {
-      const need = C.foodNeed(s.round + 1) + 1;
+      const need = C.foodNeedFor(s, p, s.round + 1) + 1;
       want = have < need ? need - have : have > need + 1 ? -(have - need - 1) : 0;
     } else if (good === 'fuel') {
       const need = C.nonFuelBots(s, seat) + 1;

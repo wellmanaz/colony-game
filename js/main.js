@@ -30,6 +30,7 @@ const ctx = canvas.getContext('2d');
 const ZERO = { x: 0, y: 0, a: false, b: false, alt: false, start: false };
 const padPrev = [];
 const padPrevX = [];
+const padPrevY = [];
 let padIn = [];
 
 function pollPads() {
@@ -57,12 +58,16 @@ function pollPads() {
     if (down[12]) y = -1;
     if (down[13]) y = 1;
     const px = padPrevX[i] || 0;
+    const py = padPrevY[i] || 0;
     const left = (x < -0.5 && px >= -0.5) || edge(14);
     const right = (x > 0.5 && px <= 0.5) || edge(15);
-    padIn.push({ x, y, a: edge(0), b: edge(1), alt: edge(2), start: edge(9), music: edge(3), lb: edge(4), rb: edge(5), left, right });
+    const up = (y < -0.5 && py >= -0.5) || edge(12);
+    const dn = (y > 0.5 && py <= 0.5) || edge(13);
+    padIn.push({ x, y, a: edge(0), b: edge(1), alt: edge(2), start: edge(9), music: edge(3), lb: edge(4), rb: edge(5), left, right, up, dn });
     if (down.some((d, k) => d && !prev[k])) music.start();
     padPrev[i] = down;
     padPrevX[i] = x;
+    padPrevY[i] = y;
   }
 }
 
@@ -91,6 +96,8 @@ function keyboardInput() {
     rb: keysHit.has('KeyO'),
     left: keysHit.has('ArrowLeft') || keysHit.has('KeyA'),
     right: keysHit.has('ArrowRight') || keysHit.has('KeyD'),
+    up: keysHit.has('ArrowUp') || keysHit.has('KeyW'),
+    dn: keysHit.has('ArrowDown') || keysHit.has('KeyS'),
   };
 }
 
@@ -101,6 +108,11 @@ let lobby = new Array(SEATS).fill(null); // { src: 'pad'|'kbd', pad, char, ready
 // Character each empty seat's CPU player will use: random, but a ready
 // player can change the empty seat to their right with left/right.
 let aiChars = [0, 1, 2, 3].map(() => Math.floor(Math.random() * C.CHARACTERS.length));
+let cpuSel = -1; // which empty seat a ready player is editing (-1: none yet)
+
+function emptySeats() {
+  return lobby.map((s, i) => (s ? -1 : i)).filter((i) => i >= 0);
+}
 if (PARAMS.has('lobbydemo')) {
   // for screenshots: a lobby with people in it
   lobby = [
@@ -132,13 +144,15 @@ function lobbySeatInput(inp, seat, join) {
     else if (inp.b) lobby[seat] = null;
   } else {
     if (inp.b) s.ready = false;
-    if (inp.left || inp.right) {
-      for (let k = 1; k < SEATS; k++) {
-        const j = (seat + k) % SEATS;
-        if (lobby[j]) continue;
-        aiChars[j] = (aiChars[j] + (inp.right ? 1 : C.CHARACTERS.length - 1)) % C.CHARACTERS.length;
-        break;
+    // Ready players set the CPUs: up/down picks a CPU seat, left/right its character.
+    const empties = emptySeats();
+    if (empties.length) {
+      if (!empties.includes(cpuSel)) cpuSel = empties[0];
+      if (inp.up || inp.dn) {
+        const k = empties.indexOf(cpuSel);
+        cpuSel = empties[(k + (inp.dn ? 1 : empties.length - 1)) % empties.length];
       }
+      if (inp.left || inp.right) aiChars[cpuSel] = (aiChars[cpuSel] + (inp.right ? 1 : C.CHARACTERS.length - 1)) % C.CHARACTERS.length;
     }
   }
 }
@@ -1405,11 +1419,11 @@ function drawTown(now) {
     let l1 = '';
     let l2 = '';
     if (b.id === 'lot') {
-      l1 = price === null ? 'SOLD OUT' : money(price);
+      l1 = price === null ? 'SOLD OUT' : money(C.shopPrice(p, price));
       l2 = `${game.store.bots} in stock`;
       drawBot(rx, midY + 14, -1, 0.95, { now });
     } else if (o) {
-      l1 = money(o.cost);
+      l1 = money(C.shopPrice(p, o.cost));
       l2 = o.tool;
       drawGoodIcon(o.id, rx, midY, o.id === 'diamonds' ? 40 : 46);
     } else if (b.id === 'assay') {
@@ -1513,7 +1527,7 @@ function drawAuction() {
 
   // What this good is actually for, so the bidding makes sense.
   const WHY = {
-    tendies: `TENDIES = TIME. You eat ${C.foodNeed(game.round + 1)} next round; go hungry and your turn shrinks to a blink.`,
+    tendies: `TENDIES = TIME. You eat ${C.foodNeed(game.round + 1)} next round (Smooth-Brains ${C.foodNeed(game.round + 1) + 1}); go hungry and your turn shrinks to a blink.`,
     fuel: 'FUEL = PRODUCTION. Every bot that isn\'t a fuel rig burns 1 a round or sits there doing nothing.',
     chips: 'CHIPS = ROBOTS. The Exchange builds new bots only from the chips you sell it (2 each). No chips, no bots, for anyone.',
     diamonds: 'DIAMONDS = MONEY. Pure profit; nobody needs them and the Exchange pays whatever the offworld market says.',
@@ -1717,7 +1731,7 @@ function drawGoodChart(gi, age, top, bottom) {
     text(game.players[row.seat].name, x + bw / 2, baseY + 24, 20, '#c8d2e3', 'center', 600);
     // What this player needs next round, as a line across the bar.
     let need = null;
-    if (g === 'tendies') need = C.foodNeed(game.round + 1);
+    if (g === 'tendies') need = C.foodNeedFor(game, game.players[row.seat], game.round + 1);
     else if (g === 'fuel') need = C.nonFuelBots(game, row.seat);
     if (need !== null && stage === 2) {
       const ny = baseY - (need / scale) * maxH;
@@ -2078,12 +2092,24 @@ function drawLobby() {
     ctx.stroke();
     if (!s) {
       const c = C.CHARACTERS[aiChars[i]];
+      const anyReady = joined.some((q) => q.ready);
+      const selected = anyReady && cpuSel === i;
+      if (selected) {
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 3;
+        ctx.setLineDash([10, 8]);
+        rr(x + 8, y + 8, 369, 384, 12);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        text('◀', x + 40, y + 160, 40, '#f1f4f8', 'center', 800);
+        text('▶', x + 345, y + 160, 40, '#f1f4f8', 'center', 800);
+      }
       ctx.globalAlpha = 0.55;
       drawCharacter(c.id, x + 192, y + 230, 1.9, PCOL[i], 1, performance.now());
       ctx.globalAlpha = 1;
-      text(`${c.name.toUpperCase()} CPU`, x + 192, y + 282, 28, '#9aa7bd', 'center', 800);
-      text('Press A to take this seat', x + 192, y + 320, 24, '#f1f4f8', 'center');
-      text('a ready player uses ◀ ▶ to change the CPU', x + 192, y + 352, 16, '#7f8ba1', 'center', 500);
+      text(`${c.name.toUpperCase()} CPU`, x + 192, y + 282, 28, selected ? '#f1f4f8' : '#9aa7bd', 'center', 800);
+      text('Press A to take this seat', x + 192, y + 320, 22, '#f1f4f8', 'center');
+      text(selected ? '◀ ▶ change this CPU · ▲ ▼ pick another' : anyReady ? 'ready players: ▲ ▼ to select this CPU' : 'a ready player can change the CPU', x + 192, y + 352, 15, selected ? '#ffd84d' : '#7f8ba1', 'center', 500);
       continue;
     }
     const c = C.CHARACTERS[s.char];
@@ -2093,22 +2119,23 @@ function drawLobby() {
     }
     drawCharacter(c.id, x + 192, y + 230, 1.9, PCOL[i], 1, performance.now(), !s.ready);
     text(c.name.toUpperCase(), x + 192, y + 282, 32, '#f1f4f8', 'center', 800);
-    text(c.blurb, x + 192, y + 316, 18, '#c8d2e3', 'center', 500);
-    text(`${money(c.money)} · turns ×${c.time}`, x + 192, y + 344, 18, '#9aa7bd', 'center', 500);
+    text(`+ ${c.pro}`, x + 192, y + 314, 15, '#6be3a2', 'center', 600);
+    text(`− ${c.con}`, x + 192, y + 338, 15, '#ff8a8a', 'center', 600);
     if (s.ready) {
       ctx.fillStyle = PCOL[i];
-      rr(x + 30, y + 362, 325, 30, 15);
+      rr(x + 90, y + 362, 205, 30, 15);
       ctx.fill();
-      text('READY ✓ · ◀ ▶ sets a CPU · B to change', x + 192, y + 377, 16, '#141821', 'center', 800);
+      text('READY ✓ · B to change', x + 192, y + 377, 16, '#141821', 'center', 800);
     } else text(`${s.src === 'kbd' ? 'Keyboard' : `Controller ${s.pad + 1}`} · ◀ ▶ pick · A ready · B leave`, x + 192, y + 377, 17, '#9aa7bd', 'center', 500);
   }
   const canStart = allReady;
-  text(joined.length && !allReady ? 'Waiting for everyone to press A' : 'Press the Menu button to start', W / 2, 700, 40, canStart ? '#ffffff' : '#7f8ba1', 'center', 800);
-  text(`X: ${opts.rounds} rounds (${opts.rounds === 12 ? 'full game' : 'short game'})   ·   LB: starvation protection ${opts.protect ? 'ON' : 'OFF'}   ·   RB: build bots from your own chips ${opts.ownBots ? 'ON' : 'OFF'}`, W / 2, 748, 22, '#ffd84d', 'center', 600);
+  text(joined.length && !allReady ? 'Waiting for everyone to press A' : 'Press the Menu button to start', W / 2, 692, 38, canStart ? '#ffffff' : '#7f8ba1', 'center', 800);
+  if (joined.some((q) => q.ready) && emptySeats().length) text('Ready players: ▲ ▼ picks a CPU seat, ◀ ▶ changes its character', W / 2, 724, 18, '#c8d2e3', 'center', 500);
+  text(`X: ${opts.rounds} rounds (${opts.rounds === 12 ? 'full game' : 'short game'})   ·   LB: starvation protection ${opts.protect ? 'ON' : 'OFF'}   ·   RB: build bots from your own chips ${opts.ownBots ? 'ON' : 'OFF'}`, W / 2, 756, 22, '#ffd84d', 'center', 600);
   text(
     `${opts.protect ? 'You cannot sell the tendies and fuel you need' : 'Sell whatever you like, go hungry if you must'} · ${opts.ownBots ? 'when the Bot Lot is sold out, 2 of your chips and $50 build you a bot' : 'only the Exchange builds bots, from chips it has bought'}`,
     W / 2,
-    776,
+    782,
     18,
     '#9aa7bd',
     'center',

@@ -20,12 +20,17 @@ const dt = 1 / 60;
 let failures = 0;
 const agg = { plots: 0, bots: 0, lost: 0, worth: 0, colony: 0, success: 0, whales: 0, assays: 0, botsLeft: 0, minMoney: Infinity, maxWorth: 0, endings: {} };
 const wins = [0, 0, 0, 0];
+const byChar = {};
 const worthBySeat = [0, 0, 0, 0];
 const botsBySeat = [0, 0, 0, 0];
 const dbg = [0, 1, 2, 3].map(() => ({}));
 
 for (let g = 0; g < GAMES; g++) {
-  const defs = [0, 1, 2, 3].map((i) => ({ kind: 'ai', name: `Hedgie ${i + 1}` }));
+  // One of each character, rotating seats so no character always sits first.
+  const defs = [0, 1, 2, 3].map((i) => {
+    const c = C.CHARACTERS[(i + g) % C.CHARACTERS.length];
+    return { kind: 'ai', name: `${c.name} CPU`, char: c.id };
+  });
   const s = C.newGame(defs, mulberry32(g + 1));
   const ais = defs.map(() => makeAI());
   let steps = 0;
@@ -63,6 +68,10 @@ for (let g = 0; g < GAMES; g++) {
     agg.lost += p.lostBots;
     agg.whales += p.whales;
     agg.worth += C.netWorth(s, p);
+    const bc = (byChar[p.char] = byChar[p.char] || { worth: 0, wins: 0, n: 0 });
+    bc.worth += C.netWorth(s, p);
+    bc.n++;
+    if (s.result && s.result.rows[0].seat === i) bc.wins++;
     worthBySeat[i] += C.netWorth(s, p);
     botsBySeat[i] += C.countBots(s, i);
     Object.entries(p.dbg).forEach(([k, v]) => (dbg[i][k] = (dbg[i][k] || 0) + v));
@@ -87,6 +96,7 @@ console.log(`Per seat: ${per(agg.plots)} plots, ${per(agg.bots)} bots, ${per(agg
 console.log(`Colony: avg $${Math.round(agg.colony / GAMES)}, success ${agg.success}/${GAMES}, best player $${agg.maxWorth}, lowest cash seen $${agg.minMoney}`);
 console.log(`Assayed plots per game ${(agg.assays / GAMES).toFixed(1)}, bots left in lot ${(agg.botsLeft / GAMES).toFixed(1)}, wins by seat ${wins.join('/')}`);
 console.log('Endings:', agg.endings);
+console.log('By character:', Object.entries(byChar).map(([k, v]) => `${k}: avg $${Math.round(v.worth / v.n)}, ${v.wins} wins`).join(' · '));
 dbg.forEach((d, i) => console.log(`seat ${i}`, Object.fromEntries(Object.entries(d).map(([k, v]) => [k, Math.round(v / GAMES)]))));
 console.log('Avg worth by seat', worthBySeat.map((w) => Math.round(w / GAMES)).join('/'), 'bots by seat', botsBySeat.map((b) => (b / GAMES).toFixed(1)).join('/'));
 process.exit(failures ? 1 : 0);

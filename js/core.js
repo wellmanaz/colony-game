@@ -45,12 +45,39 @@ const MIN_PRICE = { tendies: 15, fuel: 10, chips: 14, diamonds: 50 };
 // plus a handicap: starting cash and turn length. The Degen also feels
 // random events and the YOLO Bar twice as hard, in both directions.
 export const CHARACTERS = [
-  { id: 'ape', name: 'Ape', blurb: 'Apes together strong · the standard deal', money: 1000, time: 1, swing: 1 },
-  { id: 'autist', name: 'Autist', blurb: 'Expert · less cash, shorter turns', money: 700, time: 0.85, swing: 1 },
-  { id: 'degen', name: 'Degen', blurb: 'Luck and the YOLO Bar hit 2× as hard', money: 1000, time: 1, swing: 2 },
-  { id: 'smooth', name: 'Smooth-Brain', blurb: 'Beginner · more cash, longer turns', money: 1400, time: 1.2, swing: 1 },
+  {
+    id: 'ape', name: 'Ape', money: 1000, time: 1, swing: 1, holdsBot: true, adjBonus: 2,
+    pro: 'Neighbour bonus +2 · never drops a bot',
+    con: 'No head start of any kind',
+  },
+  {
+    id: 'autist', name: 'Autist', money: 600, time: 0.8, swing: 1, produceBonus: 1,
+    pro: 'Reads the charts: every bot makes +1',
+    con: 'Starts with $600 · 20% shorter turns',
+  },
+  {
+    id: 'degen', name: 'Degen', money: 1000, time: 1, swing: 2,
+    pro: 'Luck and production rolls swing 2× · bar pays 2×',
+    con: 'In both directions · the bar can cost you',
+  },
+  {
+    id: 'smooth', name: 'Smooth-Brain', money: 1400, time: 1.2, swing: 1, foodExtra: 1, shopMult: 1.15,
+    pro: 'Starts with $1,400 · 20% longer turns',
+    con: 'Eats 1 extra tendie · pays 15% more in shops',
+  },
 ];
 export const HEDGIE = { id: 'hedgie', name: 'Hedgie', money: 1000, time: 1, swing: 1 };
+
+// What a player must eat in a given round (Smooth-Brains eat more).
+export function foodNeedFor(s, p, round = s.round) {
+  return foodNeed(round) + (characterOf(p).foodExtra || 0);
+}
+
+// What a player pays in town (Smooth-Brains get ripped off).
+export function shopPrice(p, base) {
+  const m = characterOf(p).shopMult || 1;
+  return Math.round((base * m) / 5) * 5;
+}
 
 export function characterOf(p) {
   return CHARACTERS.find((c) => c.id === p.char) || HEDGIE;
@@ -146,7 +173,7 @@ export function expectedYield(s, tile, outfit, seat) {
   if (y <= 0) return 0;
   const same = s.tiles.filter((t) => t.owner === seat && t.bot === outfit && t !== tile).length;
   y += Math.floor((same + 1) / 3);
-  if (neighbours(s, tile).some((n) => n.owner === seat && n.bot === outfit)) y += 1;
+  if (neighbours(s, tile).some((n) => n.owner === seat && n.bot === outfit)) y += characterOf(s.players[seat]).adjBonus || 1;
   return y;
 }
 
@@ -275,7 +302,7 @@ export function ranking(s) {
 // for every bot that burns it.
 export function criticalLevel(s, seat, good) {
   if (!s.protect) return 0;
-  if (good === 'tendies') return foodNeed(s.round + 1);
+  if (good === 'tendies') return foodNeedFor(s, s.players[seat], s.round + 1);
   if (good === 'fuel') return nonFuelBots(s, seat);
   return 0;
 }
@@ -585,7 +612,7 @@ function enterBuilding(s, tu, b) {
       tu.outfit = -1;
       toast(s, `Bot returned for $${tu.botPaid}`);
     } else {
-      const price = botPrice(s);
+      const price = botPrice(s) === null ? null : shopPrice(p, botPrice(s));
       if (price === null && s.ownBots && p.goods.chips >= 2 && p.money >= OWN_BOT_FEE) {
         // Sold out, but you brought your own chips.
         p.goods.chips -= 2;
@@ -618,13 +645,14 @@ function enterBuilding(s, tu, b) {
     }
   } else if (b.outfit !== undefined) {
     const o = OUTFITS[b.outfit];
+    const cost = shopPrice(p, o.cost);
     if (!tu.hasBot) toast(s, `${b.name}: bring a bot from the Bot Lot first`);
     else if (tu.outfit === b.outfit) toast(s, `This bot already has a ${o.tool}`);
-    else if (p.money < o.cost) toast(s, `A ${o.tool} costs $${o.cost}. Not enough bucks.`);
+    else if (p.money < cost) toast(s, `A ${o.tool} costs $${cost}. Not enough bucks.`);
     else {
-      p.money -= o.cost;
+      p.money -= cost;
       tu.outfit = b.outfit;
-      toast(s, `Fitted a ${o.tool} for $${o.cost}`);
+      toast(s, `Fitted a ${o.tool} for $${cost}`);
     }
   } else if (b.id === 'assay') {
     if (tu.hasBot) toast(s, 'Assay Office: come back without a bot in tow');
@@ -646,13 +674,22 @@ function enterBuilding(s, tu, b) {
       toast(s, `Walk to a plot you own and press A to list it for next round's auction (reserve $${PLOT_VALUE}). A again withdraws it.`, 4);
     }
   } else if (b.id === 'pub') {
-    const base = (50 + (s.round - 1) * 18) * characterOf(p).swing;
+    const ch = characterOf(p);
+    const base = (50 + (s.round - 1) * 18) * ch.swing;
     const win = Math.max(10, Math.round((base * tu.t) / tu.length));
-    p.money += win;
-    p.dbg.pub += win;
+    if (ch.swing > 1 && s.rng() < 0.5) {
+      // Degens can lose at the bar.
+      const loss = Math.min(p.money, win);
+      p.money -= loss;
+      p.dbg.pub -= loss;
+      toast(s, `${p.name} YOLO'd the rest of the turn and LOST $${loss}`, 3);
+    } else {
+      p.money += win;
+      p.dbg.pub += win;
+      s.stats.pubMoney += win;
+      toast(s, `${p.name} YOLO'd the rest of the turn and won $${win}`, 3);
+    }
     s.stats.pub++;
-    s.stats.pubMoney += win;
-    toast(s, `${p.name} YOLO'd the rest of the turn and won $${win}`, 3);
     tu.t = 0;
   }
 }
@@ -744,7 +781,8 @@ function updateWalk(s, inputs, dt) {
         const botTile = tileAt(s, tu.bx, tu.by) || here;
         const pad = tileCenter(botTile);
         const onPad = botTile.owner === tu.seat && Math.hypot(pad.x - tu.bx, pad.y - tu.by) <= DOCK_RADIUS;
-        if (!onPad) bolt(s, tu, 'missed the pad');
+        if (!onPad && characterOf(player).holdsBot) toast(s, 'Missed the pad — but diamond hands never let go. Try again.');
+        else if (!onPad) bolt(s, tu, 'missed the pad');
         else if (tu.outfit < 0) toast(s, 'This bot has no tool yet — fit one in town');
         else {
           if (botTile.bot >= 0) toast(s, `Replaced the ${OUTFITS[botTile.bot].tool} bot`);
@@ -893,7 +931,7 @@ function startProduction(s) {
     const ledger = {};
     GOODS.forEach((g) => (ledger[g] = { before: p.goods[g], used: 0, spoiled: 0, produced: 0, after: p.goods[g] }));
     // Eat. What you lack shortens your next turn.
-    const need = foodNeed(s.round);
+    const need = foodNeedFor(s, p);
     const eaten = Math.min(need, p.goods.tendies);
     p.goods.tendies -= eaten;
     p.foodShort = need - eaten;
@@ -904,7 +942,7 @@ function startProduction(s) {
     p.goods.fuel -= fuelled;
     ledger.fuel.used = fuelled;
     // Spoilage: half of whatever you hold beyond next round's needs.
-    const keepT = foodNeed(s.round + 1);
+    const keepT = foodNeedFor(s, p, s.round + 1);
     if (p.goods.tendies > keepT) {
       ledger.tendies.spoiled = Math.floor((p.goods.tendies - keepT) / 2);
       p.goods.tendies -= ledger.tendies.spoiled;
@@ -930,8 +968,10 @@ function startProduction(s) {
       const idx = tileIndex(t.c, t.r);
       if (dark.has(idx) || idx === bearTile) return;
       let y = expectedYield(s, t, t.bot, seat);
+      const ch = characterOf(p);
+      if (y > 0 && ch.produceBonus) y += ch.produceBonus;
       const roll = s.rng();
-      y += roll < 0.25 ? -1 : roll > 0.75 ? 1 : 0;
+      y += (roll < 0.25 ? -1 : roll > 0.75 ? 1 : 0) * ch.swing;
       if (event) {
         if (event.id === 'crash' && t.bot === 2) y = Math.floor(y / 2);
         if (event.id === 'flare' && t.bot === 1) y += 2;
