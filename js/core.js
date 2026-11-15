@@ -17,7 +17,7 @@ export const CLAIM_DWELL = 0.45; // seconds the scanner rests on each plot
 export const FULL_TURN = 32; // seconds of a turn with a full belly
 export const WALK_SPEED = 460; // pixels per second
 export const AI_SPEED = 1; // AI turns run at human speed (raise to fast-forward Hedgie turns)
-export const DOCK_RADIUS = 36; // how close to a plot's pad you must stand to install a bot
+export const DOCK_RADIUS = 40; // how close to a plot's pad the bot must be to install it
 export const START_MONEY = 1000;
 export const PLOT_VALUE = 500;
 export const BOT_BASE = 100;
@@ -537,16 +537,18 @@ function updateWalk(s, inputs, dt) {
       tu.by = tu.y;
     } else if (inp.a && here) {
       if (tu.hasBot) {
-        const pad = tileCenter(here);
-        const onPad = here.owner === tu.seat && Math.hypot(pad.x - tu.x, pad.y - tu.y) <= DOCK_RADIUS;
+        // The bot, trailing behind you, is what has to be on the pad.
+        const botTile = tileAt(s, tu.bx, tu.by) || here;
+        const pad = tileCenter(botTile);
+        const onPad = botTile.owner === tu.seat && Math.hypot(pad.x - tu.bx, pad.y - tu.by) <= DOCK_RADIUS;
         if (!onPad) bolt(s, tu, 'missed the pad');
         else if (tu.outfit < 0) toast(s, 'This bot has no tool yet — fit one in town');
         else {
-          if (here.bot >= 0) toast(s, `Replaced the ${OUTFITS[here.bot].tool} bot`);
-          here.bot = tu.outfit;
+          if (botTile.bot >= 0) toast(s, `Replaced the ${OUTFITS[botTile.bot].tool} bot`);
+          botTile.bot = tu.outfit;
           tu.hasBot = false;
           tu.outfit = -1;
-          s.flash = { tile: tileIndex(here.c, here.r), t: 0.5 };
+          s.flash = { tile: tileIndex(botTile.c, botTile.r), t: 0.5 };
         }
       } else if (s.whale && s.whale.tile === tileIndex(here.c, here.r)) {
         const win = whaleReward(s.round);
@@ -746,6 +748,7 @@ function startAuction(s, gi) {
     bought: s.players.map(() => 0),
     sold: s.players.map(() => 0),
     axisMax,
+    lines: { buy: null, sell: null },
     trades: 0,
     sum: 0,
     tick: 0,
@@ -780,6 +783,10 @@ function updateAuction(s, inputs, dt) {
     return;
   }
   if (a.stage === 'trade') {
+    // The buy line is the highest bid on the floor, the sell line the lowest
+    // ask. Buyers push the buy line up; sellers bring the sell line down.
+    // Nobody crosses the other side's line: you stop on it and trade there.
+    const lines = auctionLines(s, a);
     s.players.forEach((p, i) => {
       if (!a.active[i]) return;
       const inp = inputs[i];
@@ -787,11 +794,14 @@ function updateAuction(s, inputs, dt) {
         a.active[i] = false;
         return;
       }
-      // Stick up raises your price, down lowers it, for buyers and sellers alike.
-      a.price[i] = Math.max(0, Math.min(a.axisMax, a.price[i] - inp.y * PRICE_SPEED * dt));
+      let np = a.price[i] - inp.y * PRICE_SPEED * dt;
+      if (a.roles[i] === 'buy' && lines.sell !== null) np = Math.min(np, lines.sell);
+      if (a.roles[i] === 'sell' && lines.buy !== null) np = Math.max(np, lines.buy);
+      a.price[i] = Math.max(0, Math.min(a.axisMax, np));
       if (a.roles[i] === 'buy' && p.money < 1) a.active[i] = false;
       if (a.roles[i] === 'sell' && p.goods[good] <= criticalLevel(s, i, good)) a.active[i] = false;
     });
+    a.lines = auctionLines(s, a);
 
     a.tick += dt;
     while (a.tick >= 0.3) {
@@ -857,6 +867,21 @@ function updateAuction(s, inputs, dt) {
     if (a.gi + 1 < GOODS.length) startAuction(s, a.gi + 1);
     else startSummary(s);
   }
+}
+
+// Current buy line (highest bid, the Exchange's included) and sell line
+// (lowest ask, the Exchange's included). null when nobody is on that side.
+export function auctionLines(s, a) {
+  const st = s.store;
+  const good = a.good;
+  let buy = st.stock[good] < STORE_CAP[good] ? st.buy[good] : null;
+  let sell = good !== 'diamonds' && st.stock[good] > 0 ? st.sell[good] : null;
+  s.players.forEach((p, i) => {
+    if (!a.active[i]) return;
+    if (a.roles[i] === 'buy' && p.money >= 1) buy = buy === null ? a.price[i] : Math.max(buy, a.price[i]);
+    if (a.roles[i] === 'sell') sell = sell === null ? a.price[i] : Math.min(sell, a.price[i]);
+  });
+  return { buy, sell };
 }
 
 function settlePrices(s, a) {

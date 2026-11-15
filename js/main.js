@@ -11,6 +11,7 @@ const PCOL = ['#ff6b6b', '#4d9dff', '#ffd84d', '#6be3a2'];
 const PARAMS = new URLSearchParams(location.search);
 const DEMO = PARAMS.has('demo'); // AI-only game that starts by itself
 const SKIP = Number(PARAMS.get('skip')) || 0; // demo only: seconds to fast-forward at start
+const UNTIL = PARAMS.get('until') || ''; // demo only: fast-forward until a phase (e.g. auction:trade), then SKIP more seconds
 const ROUNDS_OPT = Number(PARAMS.get('rounds')) || 0;
 
 const music = new Music();
@@ -635,8 +636,23 @@ function drawAuction() {
     ctx.setLineDash([]);
     text(label, 1630, y, 20, color, 'left', 600);
   };
-  if (sells) line(st.sell[a.good], '#3ddc84', `Exchange sells ${money(st.sell[a.good])}`);
-  if (storeBuys) line(st.buy[a.good], '#ff8ad8', `Exchange buys ${money(st.buy[a.good])}`);
+  // The Exchange's limits (faint, dashed) and the live buy/sell lines (solid).
+  if (sells) line(st.sell[a.good], 'rgba(61,220,132,0.45)', `Exchange sells ${money(st.sell[a.good])}`);
+  if (storeBuys) line(st.buy[a.good], 'rgba(255,138,216,0.45)', `Exchange buys ${money(st.buy[a.good])}`);
+  const L = a.lines || {};
+  // Label each line on the side away from its own players so nothing overlaps.
+  const solid = (price, color, label, above) => {
+    const y = yOf(price);
+    ctx.fillStyle = color;
+    ctx.fillRect(300, y - 3, 1320, 6);
+    if (above) text(label, 310, y - 18, 20, color, 'left', 800);
+    else text(label, 1610, y + 18, 20, color, 'right', 800);
+  };
+  if (L.sell !== null && L.sell !== undefined) solid(L.sell, '#ff8ad8', `SELL LINE ${money(L.sell)}`, true);
+  if (L.buy !== null && L.buy !== undefined) solid(L.buy, '#6be3a2', `BUY LINE ${money(L.buy)}`, false);
+  if (L.buy !== null && L.sell !== null && L.buy !== undefined && L.sell !== undefined && Math.abs(L.buy - L.sell) < 0.5 && a.stage === 'trade') {
+    text('DEAL!', 960, yOf(L.buy) - 30, 34, '#ffd84d', 'center', 800);
+  }
   text('BUYERS ▲', 520, top - 40, 24, '#6be3a2', 'center', 800);
   text('SELLERS ▼', 1400, top - 40, 24, '#ff8ad8', 'center', 800);
 
@@ -663,7 +679,7 @@ function drawAuction() {
   else if (a.trades) label = `${a.trades} traded, average ${money(a.sum / a.trades)}`;
   else label = 'No trades';
   text(label, W / 2, 900, 30, '#fff', 'center', 800);
-  if (a.stage === 'trade') text('Buyers push UP to bid more · sellers push DOWN to ask less · deals happen when they meet · B to stop', W / 2, 935, 20, '#9aa7bd', 'center', 500);
+  if (a.stage === 'trade') text('Buyers push UP to raise the buy line · sellers push DOWN to lower the sell line · when the lines meet, one unit trades per tick · B to stop', W / 2, 935, 20, '#9aa7bd', 'center', 500);
 }
 
 // ---------- report, summary, result ----------
@@ -878,11 +894,20 @@ function frame(now) {
   if (mode === 'lobby') {
     if (DEMO) {
       startGame();
-      for (let t = 0; t < SKIP; t += 1 / 60) {
+      const tick = () => {
         const inputs = [];
         for (let i = 0; i < SEATS; i++) inputs.push(seatInput(i, 1 / 60));
         C.update(game, inputs, 1 / 60);
+      };
+      if (UNTIL) {
+        const [ph, st] = UNTIL.split(':');
+        let guard = 0;
+        while (guard++ < 60 * 60 * 30 && game.phase !== 'over') {
+          if (game.phase === ph && (!st || (game.auction && game.auction.stage === st))) break;
+          tick();
+        }
       }
+      for (let t = 0; t < SKIP; t += 1 / 60) tick();
     } else updateLobby();
   }
   if (mode === 'game') {

@@ -230,10 +230,18 @@ function walkTurn(s, seat, mem, inp, dt) {
       return;
     }
     const c = C.tileCenter(t);
-    if (steerMap(inp, tu, c.x, c.y) < (mem.sloppy ? 90 : 22)) {
+    // The bot trails 58px behind, so stand just past the pad.
+    const d = steerMap(inp, tu, c.x + tu.facing * 58, c.y - 6);
+    const botD = Math.hypot(tu.bx - c.x, tu.by - c.y);
+    if (mem.sloppy && d < 70) {
       inp.x = 0;
       inp.y = 0;
       press();
+    } else if (d < 10) {
+      // Stand still and let the bot swing in behind before pressing.
+      inp.x = 0;
+      inp.y = 0;
+      if (botD < 20) press();
     }
     return;
   }

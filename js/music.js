@@ -1,65 +1,64 @@
 // Original background music, synthesised live with the Web Audio API.
-// A funky two-section loop: slap-ish bass, offbeat chord stabs, a
-// pentatonic lead and chiptune drums. No audio files involved.
+// A chunky, upbeat shuffle in A: a trotting bass, clip-clop woodblocks,
+// clavinet-style stabs, a bright pentatonic lead and chiptune drums.
+// No audio files involved.
 
-const BPM = 114;
+const BPM = 120;
 const STEP = 60 / BPM / 4; // one sixteenth note in seconds
-const SWING = 0.12; // delay on the off-sixteenths, as a fraction of a step
+const SWING = 0.3; // shuffle: off-sixteenths land late, which gives the trot
 
-// Note helpers. Numbers are MIDI note numbers.
 const hz = (n) => 440 * Math.pow(2, (n - 69) / 12);
-const E1 = 28;
 
-// Chord progression: two bars each, 8 bars per section.
-// Each chord lists the roots of the voicing (MIDI) and the bass root.
+// Two sections of 8 bars, chords change every 2 bars. MIDI numbers.
 const SECTION_A = [
-  { bass: E1 + 12, chord: [52, 55, 59, 62] }, // Em7
-  { bass: E1 + 12, chord: [52, 55, 59, 62] },
-  { bass: E1 + 17, chord: [57, 60, 64, 67] }, // Am7
-  { bass: E1 + 19, chord: [59, 62, 66, 69] }, // Bm7
+  { bass: 33, chord: [57, 61, 64, 67] }, // A7
+  { bass: 38, chord: [62, 66, 69, 72] }, // D7
+  { bass: 33, chord: [57, 61, 64, 67] }, // A7
+  { bass: 40, chord: [64, 68, 71, 74] }, // E7
 ];
 const SECTION_B = [
-  { bass: E1 + 15, chord: [55, 59, 62, 66] }, // Gmaj7
-  { bass: E1 + 17, chord: [57, 60, 64, 67] }, // Am7
-  { bass: E1 + 20, chord: [60, 64, 67, 71] }, // Cmaj7
-  { bass: E1 + 19, chord: [59, 63, 66, 69] }, // B7
+  { bass: 30, chord: [54, 57, 61, 64] }, // F#m7
+  { bass: 38, chord: [62, 66, 69, 74] }, // D add9
+  { bass: 40, chord: [64, 68, 71, 74] }, // E7
+  { bass: 33, chord: [57, 61, 64, 69] }, // A
 ];
 
-// Bass pattern over two bars (32 sixteenths): offsets from the chord's bass
-// root in semitones, null = rest, 'o' = octave pop.
+// Trotting bass over two bars (32 sixteenths): semitone offsets from the
+// chord's bass note, null = rest. Short notes, lots of root and octave.
 const BASS = [
-  0, null, null, 0, null, null, 12, null, 0, null, 10, null, 12, null, null, null,
-  0, null, null, 0, null, 7, null, null, 0, null, 10, 12, null, null, 7, null,
+  0, null, null, 0, 7, null, 0, null, 12, null, 10, null, 0, null, 7, null,
+  0, null, null, 0, 7, null, 0, null, 12, null, 10, 12, null, 10, 7, 5,
 ];
-// Chord stabs: which sixteenths get a stab, over two bars.
-const STABS = [null, null, 1, null, null, null, null, 1, null, null, 1, null, null, null, 1, null,
-  null, null, 1, null, null, null, null, 1, null, null, 1, null, 1, null, null, null];
-// Drums over one bar (16 sixteenths): k = kick, s = snare, h = hat, H = open hat.
-const KICK = [1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0];
-const SNARE = [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1];
-const HAT = [1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 2, 0];
+// Clip-clop woodblocks: 1 = high block, 2 = low block.
+const CLOP = [0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 1, 0, 0, 0, 2, 0];
+// Clavinet stabs over one bar: 1 = short chank, 2 = held stab.
+const STABS = [0, 1, 0, 1, 0, 0, 2, 0, 0, 1, 0, 1, 0, 0, 2, 1];
+// Drums over one bar.
+const KICK = [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0];
+const SNARE = [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0];
+const GHOST = [0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
+const HAT = [1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 2, 0];
 
-// Lead melody: E minor pentatonic degrees over 8 bars (128 sixteenths),
-// written as [step, midi, lengthInSteps]. Section B transposes freely.
+// Lead: A major pentatonic, rising cheerful phrases. [step, midi, length].
 const LEAD_A = [
-  [0, 76, 2], [2, 79, 2], [4, 81, 4], [10, 79, 2], [12, 76, 4],
-  [16, 74, 2], [18, 76, 2], [20, 79, 6], [28, 74, 2], [30, 71, 2],
-  [32, 72, 4], [36, 76, 2], [38, 79, 2], [40, 81, 6], [48, 79, 2], [50, 76, 2],
-  [52, 74, 4], [58, 71, 2], [60, 74, 2], [62, 76, 2],
-  [64, 76, 2], [66, 79, 2], [68, 83, 4], [74, 81, 2], [76, 79, 4],
-  [80, 81, 2], [82, 79, 2], [84, 76, 6], [92, 74, 2], [94, 76, 2],
-  [96, 72, 4], [100, 76, 2], [102, 79, 2], [104, 84, 6], [112, 83, 2], [114, 79, 2],
-  [116, 81, 4], [122, 79, 2], [124, 76, 4],
+  [0, 69, 2], [2, 71, 2], [4, 73, 2], [6, 76, 4], [12, 73, 2], [14, 76, 2],
+  [16, 78, 6], [24, 76, 2], [26, 73, 2], [28, 71, 4],
+  [32, 74, 2], [34, 76, 2], [36, 78, 2], [38, 81, 4], [44, 78, 2], [46, 76, 2],
+  [48, 74, 6], [56, 76, 2], [58, 78, 2], [60, 74, 4],
+  [64, 69, 2], [66, 73, 2], [68, 76, 2], [70, 81, 4], [76, 78, 2], [78, 76, 2],
+  [80, 73, 6], [88, 76, 2], [90, 78, 2], [92, 81, 4],
+  [96, 83, 2], [98, 81, 2], [100, 78, 2], [102, 76, 4], [108, 78, 2], [110, 80, 2],
+  [112, 81, 8], [122, 78, 2], [124, 76, 2], [126, 73, 2],
 ];
 const LEAD_B = [
-  [0, 79, 2], [2, 83, 2], [4, 86, 4], [10, 83, 2], [12, 79, 4],
-  [16, 81, 2], [18, 84, 2], [20, 88, 6], [28, 84, 2], [30, 81, 2],
-  [32, 84, 4], [36, 88, 2], [38, 91, 2], [40, 88, 6], [48, 84, 2], [50, 81, 2],
-  [52, 83, 4], [58, 81, 2], [60, 78, 2], [62, 75, 2],
-  [64, 79, 2], [66, 83, 2], [68, 86, 4], [74, 83, 2], [76, 79, 4],
-  [80, 81, 2], [82, 84, 2], [84, 88, 6], [92, 91, 2], [94, 88, 2],
-  [96, 84, 4], [100, 88, 2], [102, 84, 2], [104, 81, 6], [112, 83, 2], [114, 78, 2],
-  [116, 81, 4], [122, 83, 2], [124, 86, 4],
+  [0, 81, 2], [2, 83, 2], [4, 85, 4], [10, 83, 2], [12, 81, 4],
+  [16, 78, 2], [18, 81, 2], [20, 85, 6], [28, 83, 2], [30, 81, 2],
+  [32, 78, 4], [36, 81, 2], [38, 83, 2], [40, 86, 6], [48, 85, 2], [50, 83, 2],
+  [52, 81, 4], [58, 78, 2], [60, 76, 2], [62, 78, 2],
+  [64, 80, 2], [66, 83, 2], [68, 88, 4], [74, 86, 2], [76, 83, 4],
+  [80, 81, 2], [82, 83, 2], [84, 85, 6], [92, 83, 2], [94, 81, 2],
+  [96, 85, 2], [98, 88, 2], [100, 90, 4], [106, 88, 2], [108, 85, 2], [110, 83, 2],
+  [112, 81, 8], [122, 83, 2], [124, 85, 2], [126, 88, 2],
 ];
 
 export class Music {
@@ -84,7 +83,7 @@ export class Music {
       this.master = this.ctx.createGain();
       this.master.gain.value = this.muted ? 0 : 0.5;
       const comp = this.ctx.createDynamicsCompressor();
-      comp.threshold.value = -18;
+      comp.threshold.value = -16;
       comp.ratio.value = 4;
       this.master.connect(comp);
       comp.connect(this.ctx.destination);
@@ -123,23 +122,24 @@ export class Music {
     const bar16 = step % 16;
     const two = step % 32;
     const quiet = this.intensity < 1;
+    const lastBar = local >= 112;
 
-    // Drums.
     if (KICK[bar16]) this.kick(t);
-    if (SNARE[bar16] && !(quiet && bar16 === 15)) this.snare(t, bar16 === 15 ? 0.5 : 1);
-    if (HAT[bar16]) this.hat(t, HAT[bar16] === 2 ? 0.14 : 0.04, quiet ? 0.5 : 1);
+    if (SNARE[bar16]) this.snare(t, 1);
+    if (GHOST[bar16] && !quiet) this.snare(t, 0.3);
+    if (HAT[bar16]) this.hat(t, HAT[bar16] === 2 ? 0.16 : 0.045, quiet ? 0.5 : 1);
+    if (CLOP[bar16]) this.block(t, CLOP[bar16] === 1 ? 1760 : 1175, quiet ? 0.5 : 1);
+    if (lastBar && bar16 >= 12) this.snare(t, 0.5); // little fill into the next section
 
-    // Bass.
     const b = BASS[two];
-    if (b !== null) this.bass(hz(chord.bass + b), t, b === 12 ? STEP * 0.9 : STEP * 1.6);
+    if (b !== null) this.bass(hz(chord.bass + b), t, STEP * 0.9);
 
-    // Chord stabs.
-    if (STABS[two] && !quiet) this.stab(chord.chord, t);
+    const st = STABS[bar16];
+    if (st && !quiet) this.stab(chord.chord, t, st === 2 ? STEP * 1.6 : STEP * 0.5);
 
-    // Lead.
     const lead = step < 128 ? LEAD_A : LEAD_B;
     lead.forEach(([s, n, len]) => {
-      if (s === local) this.lead(hz(n), t, len * STEP * 0.85);
+      if (s === local) this.lead(hz(n), t, len * STEP * 0.8);
     });
   }
 
@@ -156,10 +156,10 @@ export class Music {
     const o = this.ctx.createOscillator();
     const g = this.ctx.createGain();
     o.type = 'sine';
-    o.frequency.setValueAtTime(150, t);
-    o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
-    g.gain.setValueAtTime(0.9, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+    o.frequency.setValueAtTime(160, t);
+    o.frequency.exponentialRampToValueAtTime(48, t + 0.1);
+    g.gain.setValueAtTime(1, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
     o.connect(g);
     g.connect(this.master);
     o.start(t);
@@ -187,14 +187,14 @@ export class Music {
   }
 
   snare(t, vol) {
-    this.noise(t, 0.18, 'bandpass', 1800, 0.5 * vol);
+    this.noise(t, 0.16, 'bandpass', 2000, 0.5 * vol);
     const o = this.ctx.createOscillator();
     const g = this.ctx.createGain();
     o.type = 'triangle';
-    o.frequency.setValueAtTime(220, t);
-    o.frequency.exponentialRampToValueAtTime(120, t + 0.08);
+    o.frequency.setValueAtTime(230, t);
+    o.frequency.exponentialRampToValueAtTime(130, t + 0.07);
     g.gain.setValueAtTime(0.4 * vol, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.11);
     o.connect(g);
     g.connect(this.master);
     o.start(t);
@@ -202,7 +202,22 @@ export class Music {
   }
 
   hat(t, dur, vol) {
-    this.noise(t, dur, 'highpass', 7000, 0.22 * vol);
+    this.noise(t, dur, 'highpass', 7500, 0.2 * vol);
+  }
+
+  // Woodblock: a short, pitched knock. Two of them alternating is the trot.
+  block(t, freq, vol) {
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(freq, t);
+    o.frequency.exponentialRampToValueAtTime(freq * 0.7, t + 0.05);
+    g.gain.setValueAtTime(0.35 * vol, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+    o.connect(g);
+    g.connect(this.master);
+    o.start(t);
+    o.stop(t + 0.09);
   }
 
   bass(freq, t, dur) {
@@ -213,12 +228,13 @@ export class Music {
     o.type = 'sawtooth';
     o2.type = 'square';
     o.frequency.value = freq;
-    o2.frequency.value = freq / 2;
+    o2.frequency.value = freq;
+    o2.detune.value = -1200;
     f.type = 'lowpass';
-    f.Q.value = 6;
-    f.frequency.setValueAtTime(1800, t);
-    f.frequency.exponentialRampToValueAtTime(220, t + 0.18);
-    this.env(g, t, 0.005, 0.1, 0.55, 0.3, dur, 0.06);
+    f.Q.value = 4;
+    f.frequency.setValueAtTime(2200, t);
+    f.frequency.exponentialRampToValueAtTime(260, t + 0.14);
+    this.env(g, t, 0.004, 0.08, 0.75, 0.4, dur, 0.05);
     o.connect(f);
     o2.connect(f);
     f.connect(g);
@@ -229,21 +245,23 @@ export class Music {
     o2.stop(t + dur + 0.1);
   }
 
-  stab(notes, t) {
+  // Clavinet-ish: thin, bright, very short.
+  stab(notes, t, dur) {
     const g = this.ctx.createGain();
     const f = this.ctx.createBiquadFilter();
-    f.type = 'lowpass';
-    f.frequency.setValueAtTime(2600, t);
-    f.frequency.exponentialRampToValueAtTime(700, t + 0.15);
-    this.env(g, t, 0.005, 0.08, 0.16, 0.06, STEP * 1.2, 0.05);
+    f.type = 'bandpass';
+    f.Q.value = 1.2;
+    f.frequency.setValueAtTime(2400, t);
+    f.frequency.exponentialRampToValueAtTime(900, t + 0.12);
+    this.env(g, t, 0.003, 0.05, 0.2, 0.08, dur, 0.04);
     notes.forEach((n, i) => {
       const o = this.ctx.createOscillator();
-      o.type = i % 2 ? 'square' : 'triangle';
+      o.type = 'square';
       o.frequency.value = hz(n);
-      o.detune.value = (i - 1.5) * 6;
+      o.detune.value = (i - 1.5) * 5;
       o.connect(f);
       o.start(t);
-      o.stop(t + STEP * 1.5);
+      o.stop(t + dur + 0.1);
     });
     f.connect(g);
     g.connect(this.master);
@@ -256,14 +274,15 @@ export class Music {
     const vg = this.ctx.createGain();
     o.type = 'square';
     o.frequency.value = freq;
-    v.frequency.value = 5.5;
-    vg.gain.value = 4;
+    v.frequency.value = 6;
+    vg.gain.value = 5;
     v.connect(vg);
     vg.connect(o.detune);
     const f = this.ctx.createBiquadFilter();
     f.type = 'lowpass';
-    f.frequency.value = 3200;
-    this.env(g, t, 0.01, 0.05, this.intensity < 1 ? 0.08 : 0.13, this.intensity < 1 ? 0.06 : 0.1, dur, 0.08);
+    f.frequency.value = 3400;
+    const peak = this.intensity < 1 ? 0.07 : 0.12;
+    this.env(g, t, 0.008, 0.05, peak, peak * 0.75, dur, 0.07);
     o.connect(f);
     f.connect(g);
     g.connect(this.master);
