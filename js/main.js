@@ -595,62 +595,137 @@ function drawCharacter(id, x, y, scale, color, facing = 1, now = 0, moving = fal
   };
 
   if (id === 'ape') {
-    // Knuckle-walking gorilla: long arms to the ground, short legs, big
-    // shoulders, no clothes. Colour band on the wrist.
+    // A heavyset silverback knuckle-walking. Limbs are tapered shapes with
+    // bending elbows and knees; the gait layers a few slow waves so nothing
+    // moves like a metronome. Idle, it breathes and sways.
     const fur = '#3b3f47';
-    const dark = '#2a2d34';
-    const skin = '#6a6f78';
-    ctx.translate(0, -bob);
-    // back leg and back arm first
-    limb(-10, -22, -10 - sw * 8, 0, 10, dark);
-    limb(14, -44, 30 + sw * 10, 0, 11, dark);
-    // body: hunched, wide shoulders
+    const dark = '#282b32';
+    const silver = '#5e636d';
+    const skin = '#6f747d';
+    const g = moving ? t : now / 900; // gait phase, or a slow idle sway
+    const stride = moving ? 1 : 0;
+    const sway = Math.sin(g * 0.5 + 0.7) * (moving ? 1.5 : 1);
+    const breathe = 1 + Math.sin(now / 650) * 0.025;
+    const lurch = moving ? Math.abs(Math.sin(g)) * 3 : 0;
+    ctx.translate(sway, -lurch);
+
+    // a tapered limb: shoulder/hip -> joint -> paw, drawn as two fat strokes
+    const arm = (sx, sy, jx, jy, px, py, w1, w2, col) => {
+      ctx.strokeStyle = col;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = w1;
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(jx, jy);
+      ctx.stroke();
+      ctx.lineWidth = w2;
+      ctx.beginPath();
+      ctx.moveTo(jx, jy);
+      ctx.lineTo(px, py);
+      ctx.stroke();
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(px, py, w2 * 0.55, 0, 7);
+      ctx.fill();
+    };
+    // limb phases: diagonal pairs, with a little lag between arm and leg
+    const aF = Math.sin(g) * stride; // front arm
+    const aB = Math.sin(g + Math.PI) * stride; // back arm
+    const lF = Math.sin(g + Math.PI + 0.4) * stride; // front leg
+    const lB = Math.sin(g + 0.4) * stride; // back leg
+    const lift = (ph) => Math.max(0, Math.sin(ph)) * 4;
+
+    // far side: back leg, back arm
+    arm(-12, -22, -14 + lB * 5, -10, -12 + lB * 11, -lift(g + 0.4), 13, 11, dark);
+    arm(10, -50, 26 + aB * 6, -30 + Math.max(0, aB) * 4, 30 + aB * 12, -lift(g + Math.PI), 15, 13, dark);
+
+    // torso: barrel chest, sloping back, silver saddle
+    ctx.save();
+    ctx.translate(0, -34);
+    ctx.scale(breathe, breathe);
     ctx.fillStyle = fur;
     ctx.beginPath();
-    ctx.ellipse(0, -34, 26, 24, -0.25, 0, 7);
+    ctx.moveTo(-26, 10);
+    ctx.bezierCurveTo(-34, -10, -20, -30, 4, -28);
+    ctx.bezierCurveTo(26, -28, 36, -16, 32, 4);
+    ctx.bezierCurveTo(28, 18, 4, 22, -10, 18);
+    ctx.bezierCurveTo(-20, 16, -26, 14, -26, 10);
+    ctx.closePath();
     ctx.fill();
+    ctx.fillStyle = silver;
     ctx.beginPath();
-    ctx.ellipse(10, -46, 22, 16, -0.3, 0, 7);
+    ctx.moveTo(-22, 6);
+    ctx.bezierCurveTo(-24, -4, -16, -14, -4, -14);
+    ctx.bezierCurveTo(-12, -4, -14, 6, -8, 14);
+    ctx.closePath();
     ctx.fill();
+    // chest muscle
     ctx.fillStyle = skin;
     ctx.beginPath();
-    ctx.ellipse(-2, -28, 12, 14, 0, 0, 7);
+    ctx.ellipse(10, 2, 13, 11, 0.2, 0, 7);
     ctx.fill();
-    // front leg and front arm
-    limb(-4, -20, -4 + sw * 8, 0, 10, fur);
-    limb(18, -46, 34 - sw * 10, 0, 12, fur);
-    // knuckles
+    ctx.strokeStyle = fur;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(10, -6);
+    ctx.lineTo(10, 10);
+    ctx.stroke();
+    ctx.restore();
+
+    // near side: front leg, front arm (thick, bulging)
+    arm(-4, -20, -2 + lF * 5, -9, 0 + lF * 11, -lift(g + Math.PI + 0.4), 14, 12, fur);
+    arm(16, -50, 32 + aF * 6, -28 + Math.max(0, aF) * 4, 36 + aF * 12, -lift(g), 17, 14, fur);
+    // bicep bulge on the front arm
     ctx.fillStyle = fur;
     ctx.beginPath();
-    ctx.arc(34 - sw * 10, 0, 7, 0, 7);
-    ctx.arc(30 + sw * 10, 0, 6, 0, 7);
+    ctx.ellipse(22 + aF * 3, -42, 11, 9, 0.6, 0, 7);
     ctx.fill();
     // wrist band in the player colour
     ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(31 - sw * 8, -8, 6, 0, 7);
+    ctx.save();
+    ctx.translate(34 + aF * 10, -8 - lift(g) * 0.6);
+    ctx.rotate(0.4);
+    rr(-7, -4, 14, 8, 3);
     ctx.fill();
-    // head: brow ridge, lighter face, nostrils
+    ctx.restore();
+
+    // head: set low and forward, bobbing a beat behind the body
+    const hb = moving ? Math.sin(g - 0.6) * 1.5 : Math.sin(now / 1300) * 1;
+    ctx.save();
+    ctx.translate(24, -62 + hb);
     ctx.fillStyle = fur;
     ctx.beginPath();
-    ctx.arc(22, -62, 17, 0, 7);
+    ctx.ellipse(0, 0, 17, 15, 0, 0, 7);
     ctx.fill();
     ctx.beginPath();
-    ctx.ellipse(22, -74, 12, 7, 0, 0, 7);
+    ctx.ellipse(-2, -12, 12, 7, 0, 0, 7); // sagittal crest
     ctx.fill();
     ctx.fillStyle = skin;
     ctx.beginPath();
-    ctx.ellipse(26, -58, 11, 10, 0, 0, 7);
+    ctx.ellipse(5, 4, 11, 10, 0, 0, 7);
     ctx.fill();
-    ctx.fillStyle = dark;
-    ctx.fillRect(16, -68, 18, 4);
-    eye(22, -62, 2.4);
-    eye(31, -62, 2.4);
     ctx.fillStyle = dark;
     ctx.beginPath();
-    ctx.arc(25, -53, 1.6, 0, 7);
-    ctx.arc(30, -53, 1.6, 0, 7);
+    ctx.moveTo(-6, -6);
+    ctx.lineTo(14, -6);
+    ctx.lineTo(13, -2);
+    ctx.lineTo(-5, -2);
+    ctx.closePath();
+    ctx.fill(); // brow ridge
+    eye(1, -0.5, 2.2);
+    eye(9, -0.5, 2.2);
+    ctx.fillStyle = dark;
+    ctx.beginPath();
+    ctx.arc(4, 8, 1.6, 0, 7);
+    ctx.arc(9, 8, 1.6, 0, 7);
     ctx.fill();
+    ctx.strokeStyle = dark;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(6, 11, 5, 0.3, Math.PI - 0.3);
+    ctx.stroke();
+    ctx.restore();
   } else if (id === 'hedgie') {
     ctx.translate(0, -bob);
     limb(-6, -10, -6 - sw * 9, 0, 7, '#2a2f3c');
