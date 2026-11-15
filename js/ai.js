@@ -253,9 +253,15 @@ function walkTurn(s, seat, mem, inp, dt) {
     return;
   }
   if (s.coin && !tu.coinCaught) {
+    // CPUs take a human-ish moment to notice it, and sometimes don't bother.
+    if (mem.coinKey !== s.coin) {
+      mem.coinKey = s.coin;
+      mem.coinDelay = 0.5 + s.rng() * 0.5;
+      mem.coinWant = s.rng() < 0.6;
+    }
+    mem.coinDelay -= dt;
     const d = Math.hypot(s.coin.x - tu.x, s.coin.y - tu.y);
-    // Only worth a dash if it is close enough to reach before it blinks out.
-    if (d < s.coin.t * C.WALK_SPEED * 0.8) {
+    if (mem.coinWant && mem.coinDelay <= 0 && d < s.coin.t * C.WALK_SPEED * 0.8) {
       if (steerMap(inp, tu, s.coin.x, s.coin.y) < 28) press();
       return;
     }

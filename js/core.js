@@ -14,7 +14,7 @@ export const EXCHANGE_X = MAP_X + 5 * TILE_W;
 export const EXCHANGE_Y = MAP_Y + 3 * TILE_H;
 
 export const CLAIM_DWELL = 0.3; // seconds the scanner rests on each plot
-export const COIN_TIME = 1.5; // how long a Bitcoin stays visible
+export const COIN_TIME = 2.6; // how long a Bitcoin stays visible
 export const COIN_RADIUS = 40; // how close you must be to grab it
 export const CHART_TIME = 2.2; // fall + rise of the production chart
 export const FULL_TURN = 32; // seconds of a turn with a full belly
@@ -705,10 +705,18 @@ function updateCoin(s, dt) {
   const tu = s.turn;
   if (tu.coinCaught || tu.scene !== 'map' || tu.t < 3) return;
   if (s.rng() < dt * 0.22) {
-    const spots = s.tiles.filter((t) => !t.exchange);
-    const t = spots[Math.floor(s.rng() * spots.length)];
-    const c = tileCenter(t);
-    s.coin = { x: c.x + (s.rng() - 0.5) * 100, y: c.y + (s.rng() - 0.5) * 70, t: COIN_TIME };
+    // It appears within a short dash of wherever you are, never in the Exchange.
+    for (let tries = 0; tries < 12; tries++) {
+      const ang = s.rng() * Math.PI * 2;
+      const dist = 160 + s.rng() * 300;
+      const x = tu.x + Math.cos(ang) * dist;
+      const y = tu.y + Math.sin(ang) * dist;
+      if (x < MAP_X + 30 || x > MAP_X + MAP_W - 30 || y < MAP_Y + 30 || y > MAP_Y + MAP_H - 30) continue;
+      const t = tileAt(s, x, y);
+      if (!t || t.exchange) continue;
+      s.coin = { x, y, t: COIN_TIME };
+      break;
+    }
   }
 }
 
