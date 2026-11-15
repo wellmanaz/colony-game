@@ -316,6 +316,19 @@ function drawTile(t) {
     ctx.lineTo(x + 4, y + 40);
     ctx.fill();
   }
+  if (t.owner >= 0) {
+    // the pad a bot has to be installed on
+    const mine = game.phase === 'walk' && game.turn.seat === t.owner;
+    ctx.strokeStyle = PCOL[t.owner];
+    ctx.globalAlpha = mine ? 1 : 0.45;
+    ctx.lineWidth = 4;
+    ctx.setLineDash([7, 6]);
+    ctx.beginPath();
+    ctx.arc(x + w / 2, y + h / 2, 20, 0, 7);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+  }
   if (t.bot >= 0) drawBot(x + w / 2, y + h / 2 + 12, t.bot, 1.05);
 }
 
@@ -406,7 +419,7 @@ function drawGame(now) {
     const o = C.OUTFITS[tu.outfit];
     let hint;
     if (p.kind === 'ai') hint = `${p.name} is working`;
-    else if (tu.hasBot) hint = `Stick: move · X: change tool (${o.tool} → ${o.name}) · A: install on your plot · B: end turn`;
+    else if (tu.hasBot) hint = `X: change tool (${o.tool} → ${o.name}) · A: install — stand on your plot's pad or the bot bolts · B: end turn`;
     else hint = 'Walk back to The Exchange for another bot · B: end turn';
     text(hint, 1700, 58, 28, '#c8d2e3', 'right', 500);
     text(String(Math.max(0, Math.ceil(tu.t))), 1840, 58, 48, tu.t < 5 ? '#ff6b6b' : '#f1f4f8', 'right', 800);
@@ -414,7 +427,20 @@ function drawGame(now) {
     drawWalker(tu.x, tu.y, PCOL[tu.seat], p.kind === 'ai', tu.facing);
   }
 
+  game.runaways.forEach((r) => {
+    const wob = Math.sin(now / 45) * 9;
+    drawBot(r.x + wob, r.y, r.outfit, 0.9);
+    text('!', r.x + wob + 30, r.y - 44, 40, '#ff6b6b', 'center', 800);
+  });
+
   drawPanels();
+
+  if (game.toast) {
+    ctx.fillStyle = 'rgba(8,10,16,0.85)';
+    rr(W / 2 - 520, 866, 1040, 70, 35);
+    ctx.fill();
+    text(game.toast.text, W / 2, 902, 36, '#ffd84d', 'center', 800);
+  }
 
   if (game.banner) {
     ctx.fillStyle = 'rgba(8,10,16,0.82)';
@@ -427,7 +453,7 @@ function drawGame(now) {
     ctx.fillRect(0, 300, W, 480);
     text('Prototype ends here', W / 2, 380, 72, '#3ddc84', 'center', 800);
     game.players.forEach((p, i) => {
-      text(`${p.name}: ${C.countPlots(game, i)} plots, ${C.countBots(game, i)} bots`, W / 2, 470 + i * 52, 36, PCOL[i], 'center');
+      text(`${p.name}: ${C.countPlots(game, i)} plots, ${C.countBots(game, i)} bots, ${p.lostBots} ran off`, W / 2, 470 + i * 52, 36, PCOL[i], 'center');
     });
     text('Press A to go back to the start screen', W / 2, 720, 30, '#c8d2e3', 'center', 500);
   }

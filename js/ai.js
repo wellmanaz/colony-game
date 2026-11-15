@@ -90,12 +90,18 @@ export function aiInput(s, seat, mem, dt) {
         goal = t;
       }
     });
+    // Now and then a Hedgie gets impatient and lets go of the bot too early.
+    const key = `${s.round}:${tu.seat}:${tu.botCount}`;
+    if (mem.botKey !== key) {
+      mem.botKey = key;
+      mem.sloppy = s.rng() < 0.07;
+    }
     if (tu.outfit !== bestOutfit(goal)) {
       inp.alt = true;
       return inp;
     }
     const c = tileCenter(goal);
-    if (steer(inp, tu.x, tu.y, c.x, c.y) < 24) {
+    if (steer(inp, tu.x, tu.y, c.x, c.y) < (mem.sloppy ? 90 : 24)) {
       inp.x = 0;
       inp.y = 0;
       inp.a = true;

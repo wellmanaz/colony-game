@@ -20,6 +20,7 @@ const dt = 1 / 60;
 let failures = 0;
 let totalPlots = 0;
 let totalBots = 0;
+let totalLost = 0;
 
 for (let g = 0; g < GAMES; g++) {
   const defs = [0, 1, 2, 3].map((i) => ({ kind: 'ai', name: `Hedgie ${i + 1}` }));
@@ -44,6 +45,7 @@ for (let g = 0; g < GAMES; g++) {
     const bots = C.countBots(s, i);
     totalPlots += plots;
     totalBots += bots;
+    totalLost += s.players[i].lostBots;
     if (plots > C.ROUNDS) problems.push(`seat ${i} has ${plots} plots`);
     if (plots < C.ROUNDS - 2) problems.push(`seat ${i} only claimed ${plots} plots`);
     if (bots < plots - 1) problems.push(`seat ${i} staffed ${bots} of ${plots} plots`);
@@ -55,6 +57,6 @@ for (let g = 0; g < GAMES; g++) {
 }
 
 console.log(
-  `${GAMES} games, ${failures} with problems. Average per seat: ${(totalPlots / GAMES / 4).toFixed(2)} plots, ${(totalBots / GAMES / 4).toFixed(2)} bots.`
+  `${GAMES} games, ${failures} with problems. Average per seat: ${(totalPlots / GAMES / 4).toFixed(2)} plots, ${(totalBots / GAMES / 4).toFixed(2)} bots, ${(totalLost / GAMES / 4).toFixed(2)} bots ran off.`
 );
 process.exit(failures ? 1 : 0);

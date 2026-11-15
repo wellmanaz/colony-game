@@ -17,6 +17,7 @@ export const CLAIM_DWELL = 0.55; // seconds the scanner rests on each plot
 export const TURN_TIME = 20; // seconds per walking turn
 export const WALK_SPEED = 460; // pixels per second
 export const AI_SPEED = 2.5; // AI turns play out faster
+export const DOCK_RADIUS = 36; // how close to a plot's pad you must stand to install a bot
 
 export const OUTFITS = [
   { id: 'tendies', name: 'Tendies', tool: 'Fryer', letter: 'T', color: '#f2a33c' },
@@ -109,13 +110,15 @@ export function newGame(seatDefs, rng = Math.random) {
   const s = {
     rng,
     tiles: makeMap(rng),
-    players: seatDefs.map((d, i) => ({ index: i, kind: d.kind, name: d.name, claimed: false, lastPlot: -1 })),
+    players: seatDefs.map((d, i) => ({ index: i, kind: d.kind, name: d.name, claimed: false, lastPlot: -1, lostBots: 0 })),
     round: 1,
     phase: 'claim',
     claim: null,
     turn: null,
     banner: null,
     flash: null,
+    toast: null,
+    runaways: [],
   };
   startClaim(s);
   return s;
@@ -171,12 +174,26 @@ function startTurn(s, seat) {
     by: EXCHANGE_Y,
     outfit: 0,
     hasBot: true,
+    botCount: 1,
     facing: 1,
   };
   setBanner(s, `${s.players[seat].name} — your turn`, 1.2);
 }
 
+// The bot being led panics and runs off. Its owner has to fetch another.
+function bolt(s, tu) {
+  const ang = s.rng() * Math.PI * 2;
+  s.runaways.push({ x: tu.bx, y: tu.by, vx: Math.cos(ang) * 620, vy: Math.sin(ang) * 620, outfit: tu.outfit, t: 3 });
+  tu.hasBot = false;
+  s.players[tu.seat].lostBots++;
+  s.toast = { text: `Paper hands! ${s.players[tu.seat].name}'s bot bolted`, t: 2.4 };
+}
+
 function endTurn(s) {
+  // A bot still in tow out in the field when the turn ends runs away.
+  const tu = s.turn;
+  const at = tileAt(s, tu.x, tu.y);
+  if (tu.hasBot && at && !at.exchange) bolt(s, tu);
   const next = s.turn.seat + 1;
   if (next < s.players.length) {
     startTurn(s, next);
@@ -214,14 +231,22 @@ function updateWalk(s, inputs, dt) {
   const here = tileAt(s, tu.x, tu.y);
   if (!tu.hasBot && here && here.exchange) {
     tu.hasBot = true;
+    tu.botCount++;
     tu.bx = tu.x;
     tu.by = tu.y;
   }
   if (tu.hasBot && inp.alt) tu.outfit = (tu.outfit + 1) % OUTFITS.length;
-  if (tu.hasBot && inp.a && here && !here.exchange && here.owner === tu.seat) {
-    here.bot = tu.outfit;
-    tu.hasBot = false;
-    s.flash = { tile: tileIndex(here.c, here.r), t: 0.5 };
+  if (tu.hasBot && inp.a && here && !here.exchange) {
+    // Installing only works standing on the pad of your own plot. Anywhere
+    // else, letting go of the bot means it runs away.
+    const pad = tileCenter(here);
+    if (here.owner === tu.seat && Math.hypot(pad.x - tu.x, pad.y - tu.y) <= DOCK_RADIUS) {
+      here.bot = tu.outfit;
+      tu.hasBot = false;
+      s.flash = { tile: tileIndex(here.c, here.r), t: 0.5 };
+    } else {
+      bolt(s, tu);
+    }
   }
 
   tu.t -= dt;
@@ -236,6 +261,16 @@ export function update(s, inputs, dt) {
     s.flash.t -= dt;
     if (s.flash.t <= 0) s.flash = null;
   }
+  if (s.toast) {
+    s.toast.t -= dt;
+    if (s.toast.t <= 0) s.toast = null;
+  }
+  s.runaways.forEach((r) => {
+    r.x += r.vx * dt;
+    r.y += r.vy * dt;
+    r.t -= dt;
+  });
+  s.runaways = s.runaways.filter((r) => r.t > 0);
   if (s.banner) {
     s.banner.t -= dt;
     if (s.banner.t <= 0) s.banner = null;
