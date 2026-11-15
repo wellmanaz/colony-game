@@ -3,26 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Colony Game</title>
+<title>Tendie Town</title>
 <style>
-  body {
-    margin: 0; padding: 6vh 6vw;
-    background: #10141c; color: #e8ecf2;
-    font: 2.6vh/1.5 system-ui, "Segoe UI", sans-serif;
-  }
-  h1 { font-size: 5vh; margin: 0 0 2vh; }
-  p { color: #9fb4d0; max-width: 60ch; }
-  a {
-    display: inline-block; margin-top: 2vh; padding: 1.5vh 2.5vw;
-    background: #4fd08a; color: #06210f; font-weight: 700;
-    border-radius: 1vh; text-decoration: none; font-size: 3vh;
-  }
-  a:focus { outline: 0.5vh solid #fff; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+  body { display: flex; align-items: center; justify-content: center; }
+  canvas { display: block; background: #0a0c13; }
 </style>
 </head>
 <body>
-<h1>Colony Game</h1>
-<p>A four-player couch economic strategy game, in early development.</p>
-<a href="pad/" autofocus>Controller test</a>
+<canvas id="game" width="1920" height="1080"></canvas>
+<script type="module" src="js/main.js"></script>
 </body>
 </html>
