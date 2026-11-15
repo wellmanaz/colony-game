@@ -106,6 +106,43 @@ export class Music {
     this.intensity = v;
   }
 
+  // Falling or rising slide used by the production chart.
+  slide(up, dur = 1) {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    const o = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(up ? 220 : 880, t);
+    o.frequency.exponentialRampToValueAtTime(up ? 880 : 220, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(0.25, t + 0.03);
+    g.gain.setValueAtTime(0.25, t + dur - 0.05);
+    g.gain.linearRampToValueAtTime(0.0001, t + dur);
+    o.connect(g);
+    g.connect(this.master);
+    o.start(t);
+    o.stop(t + dur + 0.05);
+  }
+
+  // Short blip for a winning land bid.
+  ding() {
+    if (!this.ctx || this.muted) return;
+    const t = this.ctx.currentTime;
+    [880, 1320].forEach((f, i) => {
+      const o = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = f;
+      g.gain.setValueAtTime(0.2, t + i * 0.08);
+      g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.08 + 0.3);
+      o.connect(g);
+      g.connect(this.master);
+      o.start(t + i * 0.08);
+      o.stop(t + i * 0.08 + 0.35);
+    });
+  }
+
   schedule() {
     const ahead = this.ctx.currentTime + 0.2;
     while (this.nextTime < ahead) {

@@ -313,12 +313,7 @@ function drawGem(x, y, size, color) {
 
 // ---------- map ----------
 
-function drawTile(t, now) {
-  if (t.exchange) return;
-  const x = C.MAP_X + t.c * C.TILE_W + 3;
-  const y = C.MAP_Y + t.r * C.TILE_H + 3;
-  const w = C.TILE_W - 6;
-  const h = C.TILE_H - 6;
+function paintTerrain(t, x, y, w, h) {
   const base = { plain: '#555b68', dip: '#2c6152', crater: '#474c59', ridge: '#655f6e' }[t.type];
   ctx.fillStyle = base;
   rr(x, y, w, h, 10);
@@ -367,9 +362,24 @@ function drawTile(t, now) {
     }
   }
   ctx.restore();
-
   if (t.assayed) {
     for (let k = 0; k < 3; k++) drawGem(x + w - 18 - k * 20, y + 16, 8, k < t.dia ? '#c9a4ff' : 'rgba(0,0,0,0.35)');
+  }
+}
+
+function drawTile(t, now) {
+  if (t.exchange) return;
+  const x = C.MAP_X + t.c * C.TILE_W + 3;
+  const y = C.MAP_Y + t.r * C.TILE_H + 3;
+  const w = C.TILE_W - 6;
+  const h = C.TILE_H - 6;
+  paintTerrain(t, x, y, w, h);
+
+  if (t.forSale) {
+    ctx.fillStyle = '#ffd84d';
+    rr(x + 8, y + h - 34, 96, 26, 6);
+    ctx.fill();
+    text('FOR SALE', x + 56, y + h - 21, 15, '#141821', 'center', 800);
   }
 
   if (t.owner >= 0) {
@@ -475,7 +485,7 @@ function drawTown(now) {
   const price = C.botPrice(game);
   C.TOWN.buildings.forEach((b) => {
     const o = b.outfit !== undefined ? C.OUTFITS[b.outfit] : null;
-    const col = o ? o.color : b.id === 'lot' ? '#cfd6e0' : b.id === 'pub' ? '#ff8ad8' : '#c9a4ff';
+    const col = o ? o.color : b.id === 'lot' ? '#cfd6e0' : b.id === 'pub' ? '#ff8ad8' : b.id === 'land' ? '#ffd84d' : '#c9a4ff';
     ctx.fillStyle = '#1d2638';
     rr(b.x, b.y, b.w, b.h, 16);
     ctx.fill();
@@ -499,12 +509,16 @@ function drawTown(now) {
       drawBot(b.x + b.w / 2, b.y + 150, b.outfit, 1.1);
     } else if (b.id === 'assay') {
       l1 = 'Check a plot for diamonds';
-      l2 = 'walk in, fetch a sample, walk back';
+      l2 = 'fetch a sample, bring it back';
       drawGem(b.x + b.w / 2, b.y + 140, 30, '#c9a4ff');
+    } else if (b.id === 'land') {
+      l1 = 'Sell a plot you own';
+      l2 = 'then press A on your plot';
+      text('🏷️', b.x + b.w / 2, b.y + 140, 54, '#fff', 'center');
     } else if (b.id === 'pub') {
       const base = 50 + (game.round - 1) * 18;
       l1 = 'YOLO the rest of your turn';
-      l2 = `pays up to ${money(base)} — more the sooner you quit`;
+      l2 = `up to ${money(base)} · the sooner, the more`;
       text('🍺', b.x + b.w / 2, b.y + 140, 60, '#fff', 'center');
     }
     text(l1, b.x + b.w / 2, b.y + 80, 24, '#f1f4f8', 'center');
@@ -662,7 +676,8 @@ function drawAuction() {
     ctx.fillStyle = PCOL[i];
     ctx.fillRect(x - 50, y - 3, 100, 6);
     drawWalker(x, buyer ? y + 30 : y - 30, PCOL[i], p.kind === 'ai', 1);
-    const tagY = buyer ? y + 82 : y - 86;
+    // Sellers parked at the very top get their tag below the line instead.
+    const tagY = buyer ? y + 82 : a.price[i] > a.axisMax * 0.85 ? y + 22 : y - 86;
     text(money(a.price[i]), x, tagY, 22, '#fff', 'center', 800);
     const status = a.bounced[i] || (a.active[i] ? '' : 'stepped off');
     text(status ? `${p.name} · ${status}` : p.name, x, tagY + 24, 16, '#c8d2e3', 'center', 500);
@@ -681,40 +696,193 @@ function drawAuction() {
 
 // ---------- report, summary, result ----------
 
+let reportRef = null;
+let reportSfx = new Set();
+const REPORT_STEP = 2.6; // seconds per good: fall, then rise
+const FALL = 1.1;
+const RISE = 1.1;
+
 function drawReport() {
   const r = game.report;
+  if (reportRef !== r) {
+    reportRef = r;
+    reportSfx = new Set();
+  }
   drawTopBar('Production');
-  text('PRODUCTION REPORT', W / 2, 150, 60, '#3ddc84', 'center', 800);
-  let y = 230;
+  text('PRODUCTION REPORT', W / 2, 140, 56, '#3ddc84', 'center', 800);
+  let y = 200;
   if (r.event) {
     ctx.fillStyle = 'rgba(255,107,107,0.15)';
-    rr(160, y - 34, 1600, 68, 16);
+    rr(160, y - 28, 1600, 56, 14);
     ctx.fill();
-    text(r.event.text, W / 2, y, 30, '#ff6b6b', 'center', 800);
-    y += 70;
+    text(r.event.text, W / 2, y, 28, '#ff6b6b', 'center', 800);
+    y += 56;
   }
-  r.notes.forEach((n) => {
-    text(n, W / 2, y, 24, '#ffd84d', 'center', 600);
-    y += 36;
+  r.notes.slice(0, 3).forEach((n) => {
+    text(n, W / 2, y, 21, '#ffd84d', 'center', 600);
+    y += 30;
   });
-  y += 20;
-  const cols = [420, 760, 1000, 1240, 1480];
-  C.OUTFITS.forEach((o, k) => text(o.name, cols[k + 1], y, 26, o.color, 'center', 800));
-  y += 50;
-  r.rows.forEach((row) => {
-    const p = game.players[row.seat];
-    ctx.fillStyle = '#161b28';
-    rr(200, y - 32, 1520, 64, 12);
+
+  const baseY = 820;
+  const maxH = 380;
+  const groupX = [360, 760, 1160, 1560];
+  const gi = Math.floor(r.age / REPORT_STEP);
+  const within = r.age - gi * REPORT_STEP;
+
+  C.OUTFITS.forEach((o, k) => {
+    const g = o.id;
+    const gx = groupX[k];
+    let scale = 8;
+    r.rows.forEach((row) => {
+      const L = row.ledger[g];
+      scale = Math.max(scale, L.before, L.after);
+    });
+    const active = k === gi;
+    if (active && within < FALL && !reportSfx.has(`${k}d`)) {
+      reportSfx.add(`${k}d`);
+      if (r.rows.some((row) => row.ledger[g].used + row.ledger[g].spoiled > 0)) music.slide(false, FALL);
+    }
+    if (active && within >= FALL && within < FALL + RISE && !reportSfx.has(`${k}u`)) {
+      reportSfx.add(`${k}u`);
+      if (r.rows.some((row) => row.ledger[g].produced > 0)) music.slide(true, RISE);
+    }
+    // group frame
+    ctx.fillStyle = active ? '#1a2234' : '#121724';
+    rr(gx - 180, baseY - maxH - 60, 360, maxH + 110, 14);
     ctx.fill();
-    text(p.name, cols[0] - 180, y, 30, PCOL[row.seat], 'left', 800);
-    C.OUTFITS.forEach((o, k) => text(row.gained[o.id] ? `+${row.gained[o.id]}` : '—', cols[k + 1], y, 30, row.gained[o.id] ? '#f1f4f8' : '#4a5468', 'center', 700));
-    const note = [];
-    if (row.dark) note.push(`${row.dark} bot${row.dark > 1 ? 's' : ''} idle, no fuel`);
-    if (row.bears) note.push('bears ate a plot');
-    text(note.join(' · '), 1700, y, 20, '#ff6b6b', 'right', 500);
-    y += 76;
+    text(o.name.toUpperCase(), gx, baseY - maxH - 34, 24, o.color, 'center', 800);
+    ctx.strokeStyle = '#2a3447';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(gx - 170, baseY);
+    ctx.lineTo(gx + 170, baseY);
+    ctx.stroke();
+
+    r.rows.forEach((row, i) => {
+      const L = row.ledger[g];
+      let v;
+      let tag = '';
+      let tagColor = '#fff';
+      const low = L.before - L.used - L.spoiled;
+      if (k < gi) v = L.after;
+      else if (k > gi) v = L.before;
+      else if (within < FALL) {
+        v = L.before + (low - L.before) * (within / FALL);
+        if (L.used + L.spoiled) {
+          tag = `−${L.used + L.spoiled}`;
+          tagColor = '#ff6b6b';
+        }
+      } else if (within < FALL + RISE) {
+        v = low + L.produced * ((within - FALL) / RISE);
+        if (L.produced) {
+          tag = `+${L.produced}`;
+          tagColor = '#6be3a2';
+        }
+      } else v = L.after;
+      const bw = 64;
+      const bx = gx - 150 + i * 84;
+      const bh = Math.max(0, (v / scale) * maxH);
+      ctx.fillStyle = PCOL[row.seat];
+      ctx.globalAlpha = k > gi ? 0.45 : 1;
+      rr(bx, baseY - bh, bw, bh, 6);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      text(String(Math.round(v)), bx + bw / 2, baseY - bh - 16, 22, '#f1f4f8', 'center', 800);
+      if (tag) text(tag, bx + bw / 2, baseY - bh - 42, 20, tagColor, 'center', 800);
+      text(game.players[row.seat].name.replace('Hedgie ', 'H').replace('Ape ', 'A'), bx + bw / 2, baseY + 18, 16, '#9aa7bd', 'center', 600);
+    });
+    if (k === 0 && active) {
+      const label = within < FALL ? 'eating and spoilage' : within < FALL + RISE ? 'production' : '';
+      if (label) text(label, gx, baseY + 44, 18, '#c8d2e3', 'center', 500);
+    } else if (active) {
+      const label = within < FALL ? (k === 1 ? 'bots burning fuel, leaks' : 'spoilage') : within < FALL + RISE ? 'production' : '';
+      if (label) text(label, gx, baseY + 44, 18, '#c8d2e3', 'center', 500);
+    }
   });
-  text(`Each turn you eat ${C.foodNeed(game.round + 1)} tendies and every non-fuel bot burns 1 fuel · A to continue (${Math.ceil(r.t)})`, W / 2, 920, 22, '#9aa7bd', 'center', 500);
+  text(`You eat ${C.foodNeed(game.round)} tendies a round and each non-fuel bot burns 1 fuel · half of any surplus spoils · A to continue (${Math.ceil(r.t)})`, W / 2, 925, 20, '#9aa7bd', 'center', 500);
+}
+
+let landSfx = '';
+function drawLand(now) {
+  const L = game.land;
+  const lot = L.lots[L.idx];
+  const t = game.tiles[lot.tile];
+  // pulse the plot on the map behind the panel
+  const pulse = 0.5 + 0.5 * Math.sin(now / 120);
+  ctx.strokeStyle = `rgba(255,216,77,${pulse})`;
+  ctx.lineWidth = 10;
+  rr(C.MAP_X + t.c * C.TILE_W - 2, C.MAP_Y + t.r * C.TILE_H - 2, C.TILE_W + 4, C.TILE_H + 4, 14);
+  ctx.stroke();
+
+  const px = 300;
+  const py = 170;
+  const pw = 1320;
+  const ph = 700;
+  ctx.fillStyle = 'rgba(10,13,20,0.94)';
+  rr(px, py, pw, ph, 20);
+  ctx.fill();
+  ctx.strokeStyle = '#ffd84d';
+  ctx.lineWidth = 4;
+  ctx.stroke();
+  text(`LAND AUCTION · lot ${L.idx + 1} of ${L.lots.length}`, px + pw / 2, py + 44, 36, '#ffd84d', 'center', 800);
+
+  // plot preview, drawn twice life size
+  ctx.save();
+  ctx.translate(px + 60, py + 110);
+  ctx.scale(2, 2);
+  paintTerrain(t, 0, 0, C.TILE_W - 6, C.TILE_H - 6);
+  if (t.bot >= 0) drawBot((C.TILE_W - 6) / 2, (C.TILE_H - 6) / 2 + 12, t.bot, 1.05);
+  ctx.restore();
+  const kind = { plain: 'Plains', dip: 'The Dip', crater: 'Crater', ridge: `Ridge, ${t.level} peak${t.level > 1 ? 's' : ''}` }[t.type];
+  text(kind, px + 60 + (C.TILE_W - 6), py + 420, 30, '#f1f4f8', 'center', 800);
+  text(`row ${t.r + 1}, column ${t.c + 1}`, px + 60 + (C.TILE_W - 6), py + 456, 20, '#9aa7bd', 'center', 500);
+  text(lot.seller >= 0 ? `Sold by ${game.players[lot.seller].name}` : 'Released by the Exchange', px + 60 + (C.TILE_W - 6), py + 488, 20, '#9aa7bd', 'center', 500);
+  text(`Minimum ${money(lot.min)}`, px + 60 + (C.TILE_W - 6), py + 530, 26, '#ffd84d', 'center', 800);
+  if (t.assayed) text(`Assayed: ${['no', 'low', 'medium', 'HIGH'][t.dia]} diamonds`, px + 60 + (C.TILE_W - 6), py + 566, 20, '#c9a4ff', 'center', 600);
+
+  // bids
+  const bx0 = px + 520;
+  const baseY = py + 560;
+  const maxH = 400;
+  const top = Math.max(lot.min * 2.5, Math.max(...L.bids) + 150, 800);
+  const yOf = (v) => baseY - (v / top) * maxH;
+  ctx.strokeStyle = 'rgba(255,216,77,0.5)';
+  ctx.setLineDash([8, 8]);
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(bx0 - 20, yOf(lot.min));
+  ctx.lineTo(bx0 + 720, yOf(lot.min));
+  ctx.stroke();
+  ctx.setLineDash([]);
+  text(`min ${money(lot.min)}`, bx0 + 730, yOf(lot.min), 16, '#ffd84d', 'left', 600);
+  game.players.forEach((p, i) => {
+    const x = bx0 + 40 + i * 180;
+    const bid = L.bids[i];
+    const h = (bid / top) * maxH;
+    const selling = i === lot.seller;
+    ctx.globalAlpha = selling ? 0.25 : 1;
+    ctx.fillStyle = PCOL[i];
+    rr(x, baseY - h, 100, h, 8);
+    ctx.fill();
+    drawWalker(x + 50, baseY - h - 40, PCOL[i], p.kind === 'ai', 1);
+    text(selling ? 'seller' : money(bid), x + 50, baseY - h - 96, 24, '#fff', 'center', 800);
+    if (L.leader === i) text('👑 leading', x + 50, baseY - h - 124, 20, '#ffd84d', 'center', 800);
+    text(p.name, x + 50, baseY + 22, 18, '#c8d2e3', 'center', 600);
+    text(money(p.money), x + 50, baseY + 46, 16, '#9aa7bd', 'center', 500);
+    ctx.globalAlpha = 1;
+  });
+
+  if (L.stage === 'bid') {
+    text(`${Math.ceil(L.t)}s`, px + pw / 2, py + ph - 70, 44, L.t < 3 ? '#ff6b6b' : '#f1f4f8', 'center', 800);
+    text('Stick UP to raise your bid, DOWN to lower it · highest bid above the minimum when the clock runs out wins · a late bid adds time', px + pw / 2, py + ph - 28, 18, '#9aa7bd', 'center', 500);
+    landSfx = '';
+  } else {
+    if (landSfx !== `${L.idx}`) {
+      landSfx = `${L.idx}`;
+      if (L.sold) music.ding();
+    }
+    text(L.result, px + pw / 2, py + ph - 50, 28, L.sold ? '#6be3a2' : '#ff8ad8', 'center', 800);
+  }
 }
 
 function drawSummary() {
@@ -732,12 +900,8 @@ function drawSummary() {
     text(p.name, 300, y, 32, PCOL[row.seat], 'left', 800);
     text(money(row.worth), 760, y, 32, '#f1f4f8', 'right', 800);
     text(`${money(p.money)} cash · ${C.countPlots(game, row.seat)} plots · ${C.countBots(game, row.seat)} bots`, 800, y, 22, '#9aa7bd', 'left', 500);
-    const sp = row.spoiled;
-    const rot = [];
-    if (sp.tendies) rot.push(`${sp.tendies} tendies went stale`);
-    if (sp.fuel) rot.push(`${sp.fuel} fuel leaked`);
-    if (sp.chips) rot.push(`${sp.chips} chips over the cap`);
-    text(rot.join(' · '), 1690, y, 20, '#ff8ad8', 'right', 500);
+    const g = p.goods;
+    text(`${g.tendies} T · ${g.fuel} F · ${g.chips} C · ${g.diamonds} D`, 1690, y, 20, '#9aa7bd', 'right', 500);
     y += 88;
   });
   text(`The Exchange built ${sm.botsBuilt} bot${sm.botsBuilt === 1 ? '' : 's'} from chips · Bot Lot now has ${game.store.bots}`, W / 2, 700, 24, '#c8d2e3', 'center', 500);
@@ -802,6 +966,19 @@ function drawGame(now) {
     drawResult();
     return;
   }
+  if (game.phase === 'land') {
+    drawTopBar('Land auction — stick UP to raise your bid');
+    drawMap(now);
+    drawLand(now);
+    drawPanels();
+    drawToasts();
+    if (game.banner) {
+      ctx.fillStyle = 'rgba(8,10,16,0.82)';
+      ctx.fillRect(0, 440, W, 170);
+      text(game.banner.text, W / 2, 525, 64, '#ffffff', 'center', 800);
+    }
+    return;
+  }
 
   if (game.phase === 'claim') {
     drawTopBar('Land grab — press A when the scanner is on the plot you want');
@@ -823,6 +1000,7 @@ function drawGame(now) {
     else if (tu.hasBot) hint = tu.outfit >= 0 ? "A on your plot's pad installs the bot — miss and it bolts · B ends turn" : 'This bot needs a tool: go back to town';
     else if (tu.assay === 'need-sample') hint = 'Stand on a plot and press A to take a sample';
     else if (tu.assay === 'have-sample') hint = 'Take the sample back to the Assay Office';
+    else if (tu.listing) hint = 'A on a plot you own lists it for sale (A again withdraws) · B ends turn';
     else hint = 'Walk into The Exchange for a bot · A on the Whale catches it · B ends turn';
     drawTopBar(`${p.name}: ${hint}`);
     drawTimer(tu);

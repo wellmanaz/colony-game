@@ -24,6 +24,8 @@ export const BOT_BASE = 100;
 export const PRICE_CAP = 265;
 export const AUCTION_TIME = 16;
 export const PRICE_SPEED = 55; // dollars per second a bid or ask moves
+export const LAND_BID_SPEED = 160; // dollars per second a land bid moves
+export const LAND_TIME = 12;
 
 export const GOODS = ['tendies', 'fuel', 'chips', 'diamonds'];
 export const OUTFITS = [
@@ -50,6 +52,7 @@ export const TOWN = {
     { id: 'shop2', name: 'Chip Fab', x: 1150, y: 190, w: 300, h: 230, outfit: 2 },
     { id: 'shop3', name: 'Diamond Cutter', x: 1490, y: 190, w: 300, h: 230, outfit: 3 },
     { id: 'assay', name: 'Assay Office', x: 470, y: 640, w: 300, h: 230 },
+    { id: 'land', name: 'Land Office', x: 810, y: 640, w: 300, h: 230 },
     { id: 'pub', name: 'YOLO Bar', x: 1150, y: 640, w: 300, h: 230 },
   ],
 };
@@ -145,6 +148,7 @@ export function makeMap(rng) {
         level: 0,
         dia: 0,
         assayed: false,
+        forSale: false,
         owner: -1,
         bot: -1,
         exchange: isExchange(c, r),
@@ -266,6 +270,7 @@ export function newGame(seatDefs, rng = Math.random, opts = {}) {
     turnIdx: 0,
     claim: null,
     turn: null,
+    land: null,
     auction: null,
     report: null,
     summary: null,
@@ -277,7 +282,7 @@ export function newGame(seatDefs, rng = Math.random, opts = {}) {
     globalEventsUsed: {},
     playerEventsUsed: {},
     result: null,
-    stats: { bolts: {}, pub: 0, pubMoney: 0, botsBought: 0, timeouts: 0 },
+    stats: { bolts: {}, pub: 0, pubMoney: 0, botsBought: 0, timeouts: 0, landSold: 0, landUnsold: 0, landMoney: 0 },
   };
   startRound(s);
   return s;
@@ -318,8 +323,7 @@ function startClaim(s) {
 function updateClaim(s, inputs, dt) {
   const cl = s.claim;
   if (cl.pos >= cl.order.length || s.players.every((p) => p.claimed)) {
-    s.turnIdx = 0;
-    startTurn(s, s.order[0]);
+    startLandAuction(s);
     return;
   }
   const tile = s.tiles[cl.order[cl.pos]];
@@ -340,6 +344,115 @@ function updateClaim(s, inputs, dt) {
   }
 }
 
+// ---------- land auction ----------
+
+export function lotMinimum(s, t) {
+  const base = { plain: 250, crater: 300, ridge: 250 + 75 * t.level, dip: 450 }[t.type];
+  return base + (s.round - 1) * 10;
+}
+
+function startTurns(s) {
+  s.land = null;
+  s.turnIdx = 0;
+  startTurn(s, s.order[0]);
+}
+
+function startLandAuction(s) {
+  const lots = [];
+  // Plots players listed at the Land Office come first; the money goes to them.
+  s.tiles.forEach((t, i) => {
+    if (t.forSale && t.owner >= 0) lots.push({ tile: i, seller: t.owner, min: PLOT_VALUE });
+  });
+  // Then the Exchange releases a few of its own, from round 2 on.
+  if (s.round >= 2) {
+    const r = s.rng();
+    const n = r < 0.35 ? 0 : r < 0.75 ? 1 : r < 0.95 ? 2 : 3;
+    const free = s.tiles.filter((t) => !t.exchange && t.owner < 0);
+    for (let k = 0; k < n && free.length; k++) {
+      const t = free.splice(Math.floor(s.rng() * free.length), 1)[0];
+      lots.push({ tile: tileIndex(t.c, t.r), seller: -1, min: lotMinimum(s, t) });
+    }
+  }
+  if (!lots.length) {
+    startTurns(s);
+    return;
+  }
+  s.phase = 'land';
+  s.land = { lots, idx: 0 };
+  openLot(s);
+  setBanner(s, 'Land auction', 1.4);
+}
+
+function openLot(s) {
+  const L = s.land;
+  L.stage = 'bid';
+  L.t = LAND_TIME;
+  L.ext = 0;
+  L.bids = s.players.map(() => 0);
+  L.leader = -1;
+  L.result = '';
+  L.sold = false;
+}
+
+function updateLand(s, inputs, dt) {
+  const L = s.land;
+  const lot = L.lots[L.idx];
+  if (L.stage === 'bid') {
+    let leaderChanged = false;
+    s.players.forEach((p, i) => {
+      if (i === lot.seller) return;
+      const inp = inputs[i];
+      L.bids[i] = Math.max(0, Math.min(p.money, L.bids[i] - inp.y * LAND_BID_SPEED * dt));
+    });
+    s.players.forEach((p, i) => {
+      if (i === lot.seller || L.bids[i] < lot.min) return;
+      if (L.leader < 0 || L.bids[i] > L.bids[L.leader] + 0.5) {
+        if (L.leader !== i) leaderChanged = true;
+        L.leader = i;
+      }
+    });
+    if (L.leader >= 0 && L.bids[L.leader] < lot.min) L.leader = -1;
+    L.t -= dt;
+    // A late bid buys everyone a couple more seconds, a few times at most.
+    if (leaderChanged && L.t < 2.5 && L.ext < 4) {
+      L.t = 2.5;
+      L.ext++;
+    }
+    if (L.t > 0) return;
+    const t = s.tiles[lot.tile];
+    if (L.leader >= 0) {
+      const w = s.players[L.leader];
+      const price = Math.round(L.bids[L.leader]);
+      w.money -= price;
+      if (lot.seller >= 0) s.players[lot.seller].money += price;
+      t.owner = L.leader;
+      t.forSale = false;
+      s.flash = { tile: lot.tile, t: 1 };
+      s.stats.landSold++;
+      s.stats.landMoney += price;
+      L.sold = true;
+      L.result = `${w.name} wins the plot for $${price}${lot.seller >= 0 ? ` — paid to ${s.players[lot.seller].name}` : ''}`;
+    } else {
+      s.stats.landUnsold++;
+      t.forSale = false;
+      L.result = `No bids over $${lot.min} — unsold, and the auction closes for this round`;
+    }
+    L.stage = 'result';
+    L.t = s.players.every((p) => p.kind === 'ai') ? 0.8 : 3;
+    return;
+  }
+  L.t -= dt;
+  if (L.t > 0) return;
+  if (L.sold && L.idx + 1 < L.lots.length) {
+    L.idx++;
+    openLot(s);
+  } else {
+    // An unsold lot ends the auction; remaining listings are withdrawn.
+    L.lots.slice(L.idx + 1).forEach((l) => (s.tiles[l.tile].forSale = false));
+    startTurns(s);
+  }
+}
+
 // ---------- development turn ----------
 
 function turnLength(p) {
@@ -349,11 +462,7 @@ function turnLength(p) {
 
 function startTurn(s, seat) {
   const p = s.players[seat];
-  // Eat. What you lack now shortens this turn.
-  const need = foodNeed(s.round);
-  const eaten = Math.min(need, p.goods.tendies);
-  p.goods.tendies -= eaten;
-  p.foodShort = need - eaten;
+  // How well you ate at the last production decides how long this turn is.
   const length = turnLength(p);
 
   s.phase = 'walk';
@@ -375,6 +484,7 @@ function startTurn(s, seat) {
     inBuilding: null,
     assay: 'none',
     sampleTile: -1,
+    listing: false,
     whaleCaught: false,
     idle: 0,
   };
@@ -459,6 +569,12 @@ function enterBuilding(s, tu, b) {
     } else if (tu.assay === 'none') {
       tu.assay = 'need-sample';
       toast(s, 'Go stand on any plot and press A to take a sample, then come back');
+    }
+  } else if (b.id === 'land') {
+    if (tu.hasBot) toast(s, 'Land Office: come back without a bot in tow');
+    else {
+      tu.listing = true;
+      toast(s, `Walk to a plot you own and press A to list it for next round's auction (reserve $${PLOT_VALUE}). A again withdraws it.`, 4);
     }
   } else if (b.id === 'pub') {
     const base = 50 + (s.round - 1) * 18;
@@ -564,6 +680,9 @@ function updateWalk(s, inputs, dt) {
         tu.assay = 'have-sample';
         tu.sampleTile = tileIndex(here.c, here.r);
         toast(s, 'Sample taken — bring it back to the Assay Office');
+      } else if (tu.listing && here.owner === tu.seat) {
+        here.forSale = !here.forSale;
+        toast(s, here.forSale ? 'Plot listed FOR SALE — it goes up for auction next round' : 'Listing withdrawn');
       }
     }
   }
@@ -687,10 +806,29 @@ function startProduction(s) {
     const seat = p.index;
     const gained = { tendies: 0, fuel: 0, chips: 0, diamonds: 0 };
     const mine = s.tiles.filter((t) => t.owner === seat && t.bot >= 0);
-    // Fuel first: every bot that is not a fuel rig burns one unit.
+    const ledger = {};
+    GOODS.forEach((g) => (ledger[g] = { before: p.goods[g], used: 0, spoiled: 0, produced: 0, after: p.goods[g] }));
+    // Eat. What you lack shortens your next turn.
+    const need = foodNeed(s.round);
+    const eaten = Math.min(need, p.goods.tendies);
+    p.goods.tendies -= eaten;
+    p.foodShort = need - eaten;
+    ledger.tendies.used = eaten;
+    // Fuel: every bot that is not a fuel rig burns one unit.
     const burners = mine.filter((t) => t.bot !== 1);
     const fuelled = Math.min(burners.length, p.goods.fuel);
     p.goods.fuel -= fuelled;
+    ledger.fuel.used = fuelled;
+    // Spoilage: half of whatever you hold beyond next round's needs.
+    const keepT = foodNeed(s.round + 1);
+    if (p.goods.tendies > keepT) {
+      ledger.tendies.spoiled = Math.floor((p.goods.tendies - keepT) / 2);
+      p.goods.tendies -= ledger.tendies.spoiled;
+    }
+    if (p.goods.fuel > burners.length) {
+      ledger.fuel.spoiled = Math.floor((p.goods.fuel - burners.length) / 2);
+      p.goods.fuel -= ledger.fuel.spoiled;
+    }
     const shuffled = burners.slice().sort(() => s.rng() - 0.5);
     const dark = new Set(shuffled.slice(fuelled).map((t) => tileIndex(t.c, t.r)));
     let bearTile = -1;
@@ -720,16 +858,29 @@ function startProduction(s) {
       const g = OUTFITS[t.bot].id;
       gained[g] += y;
     });
-    GOODS.forEach((g) => (p.goods[g] += gained[g]));
-    p.dbg.dark += dark.size;
-    return { seat, gained, dark: dark.size, bears: bearTile >= 0 };
+    GOODS.forEach((g) => {
+      p.goods[g] += gained[g];
+      ledger[g].produced = gained[g];
+    });
+    // Chips: the warehouse holds 50 at most.
+    if (p.goods.chips > 50) {
+      ledger.chips.spoiled = p.goods.chips - 50;
+      p.goods.chips = 50;
+    }
+    GOODS.forEach((g) => (ledger[g].after = p.goods[g]));
+    if (dark.size) notes.push(`${p.name}: ${dark.size} bot${dark.size > 1 ? 's' : ''} sat idle without fuel`);
+    if (bearTile >= 0) notes.push(`${p.name}: bears cleaned out a tendies plot`);
+    if (p.foodShort) notes.push(`${p.name} went hungry (${p.foodShort} short) — a shorter turn next round`);
+    return { seat, gained, ledger, dark: dark.size, bears: bearTile >= 0 };
   });
-  s.report = { event, notes, rows, t: 9 };
+  const allAI = s.players.every((p) => p.kind === 'ai');
+  s.report = { event, notes, rows, t: allAI ? 2 : 16, age: 0 };
 }
 
 function updateReport(s, inputs, dt) {
   s.report.t -= dt;
-  const skip = s.players.some((p) => p.kind === 'human' && inputs[p.index].a);
+  s.report.age += dt;
+  const skip = s.report.age > 1.5 && s.players.some((p) => p.kind === 'human' && inputs[p.index].a);
   if (s.report.t <= 0 || skip) startAuction(s, 0);
 }
 
@@ -927,25 +1078,6 @@ function settlePrices(s, a) {
 
 function startSummary(s) {
   s.phase = 'summary';
-  const spoiled = s.players.map(() => ({ tendies: 0, fuel: 0, chips: 0 }));
-  s.players.forEach((p, i) => {
-    const needT = foodNeed(s.round + 1);
-    if (p.goods.tendies > needT) {
-      const extra = p.goods.tendies - needT;
-      spoiled[i].tendies = Math.floor(extra / 2);
-      p.goods.tendies -= spoiled[i].tendies;
-    }
-    const needF = nonFuelBots(s, i);
-    if (p.goods.fuel > needF) {
-      const extra = p.goods.fuel - needF;
-      spoiled[i].fuel = Math.floor(extra / 2);
-      p.goods.fuel -= spoiled[i].fuel;
-    }
-    if (p.goods.chips > 50) {
-      spoiled[i].chips = p.goods.chips - 50;
-      p.goods.chips = 50;
-    }
-  });
   // The Exchange's perishables rot too.
   const storeSpoiled = { tendies: 0, fuel: 0 };
   ['tendies', 'fuel'].forEach((g) => {
@@ -962,7 +1094,7 @@ function startSummary(s) {
   const ranks = ranking(s);
   s.summary = {
     t: s.players.every((p) => p.kind === 'ai') ? 2 : 10,
-    rows: ranks.map((p) => ({ seat: p.index, worth: netWorth(s, p), spoiled: spoiled[p.index] })),
+    rows: ranks.map((p) => ({ seat: p.index, worth: netWorth(s, p) })),
     colony: s.players.reduce((n, p) => n + netWorth(s, p), 0),
     botsBuilt: builds,
     storeSpoiled,
@@ -1025,6 +1157,7 @@ export function update(s, inputs, dt) {
     return;
   }
   if (s.phase === 'claim') updateClaim(s, inputs, dt);
+  else if (s.phase === 'land') updateLand(s, inputs, dt);
   else if (s.phase === 'walk') updateWalk(s, inputs, dt);
   else if (s.phase === 'production') updateReport(s, inputs, dt);
   else if (s.phase === 'auction') updateAuction(s, inputs, dt);

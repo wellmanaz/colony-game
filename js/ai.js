@@ -264,6 +264,28 @@ function walkTurn(s, seat, mem, inp, dt) {
   steer(inp, tu.x, tu.y, C.EXCHANGE_X, C.EXCHANGE_Y);
 }
 
+function landBid(s, seat, mem, inp, dt) {
+  const L = s.land;
+  const lot = L.lots[L.idx];
+  if (L.stage !== 'bid' || lot.seller === seat) return;
+  const key = `${s.round}:${L.idx}`;
+  const p = s.players[seat];
+  if (mem.landKey !== key) {
+    mem.landKey = key;
+    const t = s.tiles[lot.tile];
+    const v = plotValue(s, t, seat);
+    // Worth roughly two and a half rounds of its best output, if affordable.
+    let willing = Math.round(v * 1.6 + s.rng() * 60);
+    willing = Math.min(willing, p.money - 300);
+    mem.landWilling = willing >= lot.min ? willing : 0;
+    mem.landDelay = 0.4 + s.rng() * 1.2;
+  }
+  mem.landDelay -= dt;
+  if (mem.landDelay > 0 || mem.landWilling <= 0) return;
+  // Raise only when someone else is leading, and never past what it's worth to us.
+  if (L.leader !== seat && L.bids[seat] < mem.landWilling) inp.y = -1;
+}
+
 function auctionTurn(s, seat, mem, inp, dt) {
   const a = s.auction;
   const p = s.players[seat];
@@ -338,5 +360,6 @@ export function aiInput(s, seat, mem, dt) {
   }
   if (s.phase === 'walk' && s.turn.seat === seat) walkTurn(s, seat, mem, inp, dt);
   else if (s.phase === 'auction') auctionTurn(s, seat, mem, inp, dt);
+  else if (s.phase === 'land') landBid(s, seat, mem, inp, dt);
   return inp;
 }
