@@ -470,25 +470,69 @@ function drawGoodIcon(id, x, y, size) {
   ctx.translate(x, y);
   ctx.scale(k, k);
   if (id === 'tendies') {
-    ctx.fillStyle = '#e0a23a';
-    ctx.beginPath();
-    ctx.moveTo(-20, -4);
-    ctx.bezierCurveTo(-22, -18, -6, -22, 2, -16);
-    ctx.bezierCurveTo(10, -22, 24, -14, 20, -2);
-    ctx.bezierCurveTo(26, 8, 14, 20, 2, 16);
-    ctx.bezierCurveTo(-8, 22, -24, 12, -20, -4);
-    ctx.closePath();
-    ctx.fill();
-    ctx.fillStyle = '#f2c65c';
-    ctx.beginPath();
-    ctx.ellipse(-4, -4, 10, 7, -0.4, 0, 7);
-    ctx.fill();
-    ctx.fillStyle = '#b97a1e';
-    [[-12, 4], [6, 8], [10, -8], [-2, 10]].forEach(([px, py]) => {
+    // A crispy chicken tender: a long, lumpy strip of breading with a
+    // darker crust, a golden top, crumbs, and a bite taken out of one end.
+    ctx.save();
+    ctx.rotate(-0.5);
+    const bumps = 18;
+    const outline = (rx, ry, wob) => {
       ctx.beginPath();
-      ctx.arc(px, py, 1.8, 0, 7);
+      for (let i = 0; i <= bumps; i++) {
+        const a = (i / bumps) * Math.PI * 2;
+        const r = 1 + Math.sin(i * 2.7) * wob + Math.cos(i * 1.3) * wob * 0.6;
+        const px = Math.cos(a) * rx * r;
+        const py = Math.sin(a) * ry * r;
+        if (i === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+    };
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    ctx.save();
+    ctx.translate(2, 3);
+    outline(30, 15, 0.08);
+    ctx.fill();
+    ctx.restore();
+    // crust
+    ctx.fillStyle = '#b86a1e';
+    outline(30, 15, 0.08);
+    ctx.fill();
+    // golden breading
+    ctx.fillStyle = '#e39a3a';
+    outline(26, 12, 0.1);
+    ctx.fill();
+    // lighter top
+    ctx.fillStyle = '#f3c05c';
+    ctx.save();
+    ctx.translate(-3, -3);
+    outline(18, 7, 0.14);
+    ctx.fill();
+    ctx.restore();
+    // crumbs
+    ctx.fillStyle = '#9a4f12';
+    [[-18, 4], [-8, -7], [2, 7], [12, -4], [18, 6], [-2, -1], [9, 3]].forEach(([cx, cy]) => {
+      ctx.beginPath();
+      ctx.arc(cx, cy, 1.5, 0, 7);
       ctx.fill();
     });
+    ctx.fillStyle = '#fbe0a0';
+    [[-14, -3], [6, -6], [16, 1]].forEach(([cx, cy]) => {
+      ctx.beginPath();
+      ctx.arc(cx, cy, 1.3, 0, 7);
+      ctx.fill();
+    });
+    // a bite out of the end, showing white meat
+    ctx.fillStyle = '#f6efe2';
+    ctx.beginPath();
+    ctx.arc(27, -6, 8, 0, 7);
+    ctx.fill();
+    ctx.fillStyle = '#b86a1e';
+    ctx.beginPath();
+    ctx.arc(27, -6, 8, Math.PI * 0.9, Math.PI * 1.6);
+    ctx.lineTo(27, -6);
+    ctx.fill();
+    ctx.restore();
   } else if (id === 'fuel') {
     // slim can: silver with a blue band and a red emblem on a yellow sun
     ctx.fillStyle = '#c9d1dc';
@@ -1337,6 +1381,14 @@ function drawTile(t, now) {
   if (t.bot === 0) drawFoodSign(C.tileIndex(t.c, t.r) * 7 + game.salt, x + w / 2, y + h / 2 + 4, 92, 78);
   else if (t.bot === 2) drawChipSign(C.tileIndex(t.c, t.r) * 5 + game.salt, x + w / 2, y + h / 2 + 4, 92, 78);
   else if (t.bot >= 0) drawBot(x + w / 2, y + h / 2 + 12, t.bot, 1.05, { now });
+  // A small badge of the good in the corner, so the sign is never a puzzle.
+  if (t.bot === 0 || t.bot === 2) {
+    ctx.fillStyle = 'rgba(10,12,19,0.85)';
+    ctx.beginPath();
+    ctx.arc(x + w - 22, y + h - 22, 17, 0, 7);
+    ctx.fill();
+    drawGoodIcon(C.OUTFITS[t.bot].id, x + w - 22, y + h - 22, 24);
+  }
 }
 
 function drawExchange() {
@@ -1907,24 +1959,17 @@ function drawTrader(p, i, x, y, buyer, vel, active, bounced, now) {
     ctx.fill();
     drawCharacter(p.char, 0, 0, 1, PCOL[i], 1, now, true);
   } else if (down) {
-    // parachute in the player's colour, legs kicking
-    ctx.fillStyle = PCOL[i];
-    ctx.beginPath();
-    ctx.arc(0, -104, 44, Math.PI, 0);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    ctx.beginPath();
-    ctx.arc(-14, -104, 12, Math.PI, 0);
-    ctx.fill();
-    ctx.strokeStyle = '#c8d2e3';
-    ctx.lineWidth = 1.5;
-    [-40, -14, 14, 40].forEach((lx) => {
+    // dropping: a little lean and flail, with motion streaks above
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+    ctx.lineWidth = 2;
+    [-16, 0, 16].forEach((sx, k) => {
+      const len = 14 + ((now / 40 + k * 7) % 12);
       ctx.beginPath();
-      ctx.moveTo(lx, -104);
-      ctx.lineTo(0, -64);
+      ctx.moveTo(sx, -70 - len);
+      ctx.lineTo(sx, -70);
       ctx.stroke();
     });
-    ctx.rotate(Math.sin(now / 200) * 0.08);
+    ctx.rotate(Math.sin(now / 160) * 0.1);
     drawCharacter(p.char, 0, 0, 1, PCOL[i], 1, now, true);
   } else {
     drawCharacter(p.char, 0, 0, 1, PCOL[i], 1, now, false);
@@ -1964,6 +2009,13 @@ function drawLand(now) {
   paintTerrain(t, 0, 0, C.TILE_W - 6, C.TILE_H - 6);
   if (t.bot === 0) drawFoodSign(lot.tile * 7 + game.salt, (C.TILE_W - 6) / 2, (C.TILE_H - 6) / 2 + 4, 92, 78);
   else if (t.bot === 2) drawChipSign(lot.tile * 5 + game.salt, (C.TILE_W - 6) / 2, (C.TILE_H - 6) / 2 + 4, 92, 78);
+  if (t.bot === 0 || t.bot === 2) {
+    ctx.fillStyle = 'rgba(10,12,19,0.85)';
+    ctx.beginPath();
+    ctx.arc(C.TILE_W - 6 - 22, C.TILE_H - 6 - 22, 17, 0, 7);
+    ctx.fill();
+    drawGoodIcon(C.OUTFITS[t.bot].id, C.TILE_W - 6 - 22, C.TILE_H - 6 - 22, 24);
+  }
   else if (t.bot >= 0) drawBot((C.TILE_W - 6) / 2, (C.TILE_H - 6) / 2 + 12, t.bot, 1.05, { now });
   ctx.restore();
   const kind = { plain: 'Plains', dip: 'The Dip', crater: 'Crater', ridge: `Ridge, ${t.level} peak${t.level > 1 ? 's' : ''}` }[t.type];
