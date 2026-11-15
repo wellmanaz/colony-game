@@ -580,37 +580,34 @@ function drawAuction() {
   drawTopBar(`Trading floor ${a.gi + 1} of 4`);
   text(`${o.name.toUpperCase()} AUCTION`, W / 2, 150, 64, o.color, 'center', 800);
 
-  const storeBuys = st.stock[a.good] < C.STORE_CAP[a.good];
   const sells = a.good !== 'diamonds' && st.stock[a.good] > 0;
   const stockText = a.good === 'diamonds' ? 'has buyers offworld' : `has ${st.stock[a.good]} in stock`;
-  const sellText = sells ? `sells at ${money(st.sell[a.good])}` : 'nothing to sell';
-  const buyText = storeBuys ? `buys at ${money(st.buy[a.good])}` : 'is full, not buying';
-  text(`The Exchange ${stockText} · ${sellText} · ${buyText}`, W / 2, 205, 26, '#c8d2e3', 'center', 500);
+  const sellText = sells ? `sells at ${money(st.sell[a.good])}` : 'has NOTHING to sell — no ceiling';
+  text(`The Exchange ${stockText} · ${sellText} · buys at ${money(st.buy[a.good])}`, W / 2, 205, 26, sells ? '#c8d2e3' : '#ffd84d', 'center', 500);
+
+  const top = 280;
+  const bottom = 840;
+  const yOf = (price) => bottom - (price / a.axisMax) * (bottom - top);
+  const colX = (i) => 480 + i * 320;
 
   if (a.stage === 'declare') {
-    text(`Buying or selling? ${Math.ceil(a.t)}`, W / 2, 300, 48, '#fff', 'center', 800);
-    text('Stick UP to buy · stick DOWN to sell · B to sit out', W / 2, 355, 28, '#9aa7bd', 'center', 500);
+    text(`Buying or selling? ${Math.ceil(a.t)}`, W / 2, 262, 40, '#fff', 'center', 800);
     game.players.forEach((p, i) => {
-      const x = 240 + i * 480;
+      const x = colX(i);
       const role = a.roles[i];
-      ctx.fillStyle = '#161b28';
-      rr(x - 180, 420, 360, 300, 16);
-      ctx.fill();
-      ctx.strokeStyle = PCOL[i];
-      ctx.lineWidth = role === 'none' ? 3 : 7;
-      ctx.stroke();
-      drawWalker(x, 520, PCOL[i], p.kind === 'ai', 1);
-      text(p.name, x, 600, 30, '#f1f4f8', 'center');
+      const y = role === 'buy' ? bottom - 40 : role === 'sell' ? top + 60 : (top + bottom) / 2;
+      ctx.globalAlpha = role === 'none' ? 0.4 : 1;
+      drawWalker(x, y, PCOL[i], p.kind === 'ai', 1);
+      text(p.name, x, y + 60, 24, '#f1f4f8', 'center');
       const label = role === 'buy' ? 'BUYING' : role === 'sell' ? 'SELLING' : 'sitting out';
-      text(label, x, 650, 34, role === 'buy' ? '#6be3a2' : role === 'sell' ? '#ff8ad8' : '#7f8ba1', 'center', 800);
-      text(`has ${p.goods[a.good]} · ${money(p.money)}`, x, 695, 22, '#9aa7bd', 'center', 500);
+      text(label, x, y + 90, 26, role === 'buy' ? '#6be3a2' : role === 'sell' ? '#ff8ad8' : '#7f8ba1', 'center', 800);
+      text(`has ${p.goods[a.good]} · ${money(p.money)}`, x, y + 118, 20, '#9aa7bd', 'center', 500);
+      ctx.globalAlpha = 1;
     });
+    text('Stick UP to buy · stick DOWN to sell · B to sit out', W / 2, 900, 28, '#9aa7bd', 'center', 500);
     return;
   }
 
-  const top = 260;
-  const bottom = 860;
-  const yOf = (price) => bottom - (price / a.axisMax) * (bottom - top);
   ctx.fillStyle = '#10151f';
   rr(300, top - 20, 1320, bottom - top + 40, 16);
   ctx.fill();
@@ -624,7 +621,10 @@ function drawAuction() {
     ctx.stroke();
     text(money(p), 285, y, 20, '#7f8ba1', 'right', 500);
   }
-  const line = (price, color, label) => {
+  text('SELLERS ▼', W / 2, top - 40, 22, '#ff8ad8', 'center', 800);
+  text('BUYERS ▲', W / 2, bottom + 28, 22, '#6be3a2', 'center', 800);
+
+  const dashed = (price, color, label) => {
     const y = yOf(price);
     ctx.strokeStyle = color;
     ctx.setLineDash([10, 8]);
@@ -636,41 +636,43 @@ function drawAuction() {
     ctx.setLineDash([]);
     text(label, 1630, y, 20, color, 'left', 600);
   };
-  // The Exchange's limits (faint, dashed) and the live buy/sell lines (solid).
-  if (sells) line(st.sell[a.good], 'rgba(61,220,132,0.45)', `Exchange sells ${money(st.sell[a.good])}`);
-  if (storeBuys) line(st.buy[a.good], 'rgba(255,138,216,0.45)', `Exchange buys ${money(st.buy[a.good])}`);
+  if (sells) dashed(st.sell[a.good], 'rgba(61,220,132,0.6)', `Exchange sells ${money(st.sell[a.good])}`);
+  dashed(st.buy[a.good], 'rgba(255,138,216,0.6)', `Exchange buys ${money(st.buy[a.good])}`);
+
   const L = a.lines || {};
-  // Label each line on the side away from its own players so nothing overlaps.
   const solid = (price, color, label, above) => {
     const y = yOf(price);
     ctx.fillStyle = color;
     ctx.fillRect(300, y - 3, 1320, 6);
-    if (above) text(label, 310, y - 18, 20, color, 'left', 800);
-    else text(label, 1610, y + 18, 20, color, 'right', 800);
+    text(label, 310, y + (above ? -18 : 18), 20, color, 'left', 800);
   };
   if (L.sell !== null && L.sell !== undefined) solid(L.sell, '#ff8ad8', `SELL LINE ${money(L.sell)}`, true);
   if (L.buy !== null && L.buy !== undefined) solid(L.buy, '#6be3a2', `BUY LINE ${money(L.buy)}`, false);
-  if (L.buy !== null && L.sell !== null && L.buy !== undefined && L.sell !== undefined && Math.abs(L.buy - L.sell) < 0.5 && a.stage === 'trade') {
-    text('DEAL!', 960, yOf(L.buy) - 30, 34, '#ffd84d', 'center', 800);
-  }
-  text('BUYERS ▲', 520, top - 40, 24, '#6be3a2', 'center', 800);
-  text('SELLERS ▼', 1400, top - 40, 24, '#ff8ad8', 'center', 800);
 
-  let bi = 0;
-  let si = 0;
+  // Everyone keeps their own column; buyers rise from the bottom, sellers
+  // drop from the top.
   game.players.forEach((p, i) => {
-    if (a.roles[i] === 'none') return;
-    const buyer = a.roles[i] === 'buy';
-    const x = buyer ? 400 + bi++ * 120 : 1280 + si++ * 120;
+    const x = colX(i);
+    const role = a.roles[i];
+    if (role === 'none') {
+      ctx.globalAlpha = 0.25;
+      drawWalker(x, (top + bottom) / 2, PCOL[i], p.kind === 'ai', 1);
+      text(`${p.name} · out`, x, (top + bottom) / 2 + 56, 16, '#c8d2e3', 'center', 500);
+      ctx.globalAlpha = 1;
+      return;
+    }
+    const buyer = role === 'buy';
     const y = yOf(a.price[i]);
-    ctx.globalAlpha = a.active[i] ? 1 : 0.35;
+    ctx.globalAlpha = a.active[i] ? 1 : 0.4;
     ctx.fillStyle = PCOL[i];
-    ctx.fillRect(x - 40, y - 3, 80, 6);
-    drawWalker(x, y - 30, PCOL[i], p.kind === 'ai', 1);
-    text(money(a.price[i]), x, y + 22, 22, '#fff', 'center', 800);
-    text(a.active[i] ? p.name : `${p.name} (done)`, x, y + 46, 16, '#c8d2e3', 'center', 500);
+    ctx.fillRect(x - 50, y - 3, 100, 6);
+    drawWalker(x, buyer ? y + 30 : y - 30, PCOL[i], p.kind === 'ai', 1);
+    const tagY = buyer ? y + 82 : y - 86;
+    text(money(a.price[i]), x, tagY, 22, '#fff', 'center', 800);
+    const status = a.bounced[i] || (a.active[i] ? '' : 'done');
+    text(status ? `${p.name} · ${status}` : p.name, x, tagY + 24, 16, '#c8d2e3', 'center', 500);
     const n = buyer ? a.bought[i] : a.sold[i];
-    if (n) text(buyer ? `+${n}` : `−${n}`, x, y - 78, 22, buyer ? '#6be3a2' : '#ff8ad8', 'center', 800);
+    if (n) text(buyer ? `+${n}` : `−${n}`, x + 70, buyer ? y + 30 : y - 30, 24, buyer ? '#6be3a2' : '#ff8ad8', 'center', 800);
     ctx.globalAlpha = 1;
   });
 
@@ -678,8 +680,8 @@ function drawAuction() {
   if (a.stage === 'trade') label = `${Math.ceil(a.t)}s · ${a.trades} traded`;
   else if (a.trades) label = `${a.trades} traded, average ${money(a.sum / a.trades)}`;
   else label = 'No trades';
-  text(label, W / 2, 900, 30, '#fff', 'center', 800);
-  if (a.stage === 'trade') text('Buyers push UP to raise the buy line · sellers push DOWN to lower the sell line · when the lines meet, one unit trades per tick · B to stop', W / 2, 935, 20, '#9aa7bd', 'center', 500);
+  text(label, W / 2, 910, 30, '#fff', 'center', 800);
+  if (a.stage === 'trade') text('Buyers push UP, sellers push DOWN · when a buyer meets a seller, one unit trades per tick · sold out sends you to the top, broke to the bottom · B to stop', W / 2, 943, 20, '#9aa7bd', 'center', 500);
 }
 
 // ---------- report, summary, result ----------

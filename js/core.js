@@ -33,7 +33,8 @@ export const OUTFITS = [
   { id: 'diamonds', name: 'Diamonds', tool: 'Diamond hands', shop: 'Diamond Cutter', letter: 'D', color: '#c9a4ff', cost: 100 },
 ];
 const MIN_PRICE = { tendies: 15, fuel: 10, chips: 14, diamonds: 50 };
-export const STORE_CAP = { tendies: 24, fuel: 24, chips: 30, diamonds: 9999 };
+// The Exchange buys anything offered at its price, but it can only sell
+// what it has actually been sold: run it dry and there is no ceiling.
 
 // Town interior. Buildings are touch zones; the walker enters one by
 // stepping into it. Doors are where the AI aims for.
@@ -747,6 +748,7 @@ function startAuction(s, gi) {
     active: s.players.map(() => false),
     bought: s.players.map(() => 0),
     sold: s.players.map(() => 0),
+    bounced: s.players.map(() => null),
     axisMax,
     lines: { buy: null, sell: null },
     trades: 0,
@@ -783,10 +785,11 @@ function updateAuction(s, inputs, dt) {
     return;
   }
   if (a.stage === 'trade') {
-    // The buy line is the highest bid on the floor, the sell line the lowest
-    // ask. Buyers push the buy line up; sellers bring the sell line down.
-    // Nobody crosses the other side's line: you stop on it and trade there.
+    // The buy line follows the highest player bid, the sell line the lowest
+    // player ask, wherever they go. Nobody crosses the other side's line, or
+    // the Exchange's posted price: you stop there and trade.
     const lines = auctionLines(s, a);
+    const storeSells = good !== 'diamonds' && st.stock[good] > 0;
     s.players.forEach((p, i) => {
       if (!a.active[i]) return;
       const inp = inputs[i];
@@ -795,11 +798,15 @@ function updateAuction(s, inputs, dt) {
         return;
       }
       let np = a.price[i] - inp.y * PRICE_SPEED * dt;
-      if (a.roles[i] === 'buy' && lines.sell !== null) np = Math.min(np, lines.sell);
-      if (a.roles[i] === 'sell' && lines.buy !== null) np = Math.max(np, lines.buy);
+      if (a.roles[i] === 'buy') {
+        if (lines.sell !== null) np = Math.min(np, lines.sell);
+        if (storeSells) np = Math.min(np, st.sell[good]);
+        np = Math.min(np, p.money);
+      } else {
+        if (lines.buy !== null) np = Math.max(np, lines.buy);
+        np = Math.max(np, st.buy[good]);
+      }
       a.price[i] = Math.max(0, Math.min(a.axisMax, np));
-      if (a.roles[i] === 'buy' && p.money < 1) a.active[i] = false;
-      if (a.roles[i] === 'sell' && p.goods[good] <= criticalLevel(s, i, good)) a.active[i] = false;
     });
     a.lines = auctionLines(s, a);
 
@@ -818,9 +825,7 @@ function updateAuction(s, inputs, dt) {
         const pr = Math.floor(a.price[i]);
         if (!buyer || pr > buyer.price || (pr === buyer.price && beats(p, s.players[buyer.seat]))) buyer = { seat: i, price: pr };
       });
-      const storeBuys = st.stock[good] < STORE_CAP[good];
-      if ((!buyer || buyer.price < st.buy[good]) && storeBuys) buyer = { seat: -1, price: st.buy[good] };
-      if (!buyer) continue;
+      if (!buyer || buyer.price < st.buy[good]) buyer = { seat: -1, price: st.buy[good] };
       let seller = null;
       s.players.forEach((p, i) => {
         if (!a.active[i] || a.roles[i] !== 'sell') return;
@@ -849,10 +854,24 @@ function updateAuction(s, inputs, dt) {
       a.trades++;
       a.sum += price;
     }
+    // Sold out? Back to the top. Broke? Back to the bottom.
+    s.players.forEach((p, i) => {
+      if (!a.active[i]) return;
+      if (a.roles[i] === 'sell' && p.goods[good] <= criticalLevel(s, i, good)) {
+        a.active[i] = false;
+        a.bounced[i] = 'sold out';
+        a.price[i] = a.axisMax;
+      }
+      if (a.roles[i] === 'buy' && p.money < Math.max(1, st.buy[good])) {
+        a.active[i] = false;
+        a.bounced[i] = 'out of cash';
+        a.price[i] = 0;
+      }
+    });
 
     const buyers = a.active.some((x, i) => x && a.roles[i] === 'buy');
     const sellers = a.active.some((x, i) => x && a.roles[i] === 'sell');
-    const possible = (buyers && (sellers || (st.stock[good] > 0 && good !== 'diamonds'))) || (sellers && (buyers || st.stock[good] < STORE_CAP[good]));
+    const possible = (buyers && (sellers || storeSells)) || sellers;
     a.quiet = possible ? 0 : a.quiet + dt;
     a.t -= dt;
     if (a.t <= 0 || a.quiet > 1) {
@@ -869,16 +888,15 @@ function updateAuction(s, inputs, dt) {
   }
 }
 
-// Current buy line (highest bid, the Exchange's included) and sell line
-// (lowest ask, the Exchange's included). null when nobody is on that side.
+// Current buy line (highest player bid) and sell line (lowest player ask).
+// null when no player is active on that side. The Exchange's prices are
+// separate limits, not part of these lines.
 export function auctionLines(s, a) {
-  const st = s.store;
-  const good = a.good;
-  let buy = st.stock[good] < STORE_CAP[good] ? st.buy[good] : null;
-  let sell = good !== 'diamonds' && st.stock[good] > 0 ? st.sell[good] : null;
+  let buy = null;
+  let sell = null;
   s.players.forEach((p, i) => {
     if (!a.active[i]) return;
-    if (a.roles[i] === 'buy' && p.money >= 1) buy = buy === null ? a.price[i] : Math.max(buy, a.price[i]);
+    if (a.roles[i] === 'buy') buy = buy === null ? a.price[i] : Math.max(buy, a.price[i]);
     if (a.roles[i] === 'sell') sell = sell === null ? a.price[i] : Math.min(sell, a.price[i]);
   });
   return { buy, sell };
