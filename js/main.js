@@ -665,6 +665,8 @@ function drawGoodIcon(id, x, y, size) {
 // A four-legged robot dog. The tool it carries rides on its back. Legs trot
 // when it is moving; `facing` is 1 for right, -1 for left.
 function drawBot(x, y, outfit, scale = 1, opts = {}) {
+  // A quadruped robot: boxy chassis, sensor head out front, four jointed
+  // legs with hip and knee actuators, rubber feet, no tail.
   const o = outfit >= 0 ? C.OUTFITS[outfit] : null;
   const now = opts.now || 0;
   const moving = !!opts.moving;
@@ -676,81 +678,146 @@ function drawBot(x, y, outfit, scale = 1, opts = {}) {
   // shadow
   ctx.fillStyle = 'rgba(0,0,0,0.3)';
   ctx.beginPath();
-  ctx.ellipse(0, 22, 32, 6, 0, 0, 7);
+  ctx.ellipse(0, 26, 34, 6, 0, 0, 7);
   ctx.fill();
 
-  // legs: hip positions along the body; a trot pairs diagonal legs
-  const hips = [
-    [-20, 1, 0],
-    [-14, -1, Math.PI],
-    [14, -1, Math.PI],
-    [20, 1, 0],
-  ];
   const t = now / 80;
-  hips.forEach(([hx, side, phase], i) => {
-    const swing = moving ? Math.sin(t + phase) * 0.55 : 0;
-    const lift = moving ? Math.max(0, Math.sin(t + phase)) * 3 : 0;
-    const kx = hx + Math.sin(swing) * 10;
-    const ky = 8 + Math.cos(swing) * 10 - lift;
-    const fx = kx + Math.sin(swing * 0.6) * 8;
-    const fy = ky + 10 - lift * 0.4;
-    ctx.strokeStyle = side > 0 ? '#aeb7c6' : '#7d8797';
-    ctx.lineWidth = 5;
+  const L1 = 14; // thigh
+  const L2 = 14; // shin
+  // Hips along the chassis: [x, near side?, trot phase]. Diagonal pairs move together.
+  const legs = [
+    [-20, false, Math.PI],
+    [18, false, 0],
+    [-22, true, 0],
+    [20, true, Math.PI],
+  ];
+  const leg = (hx, near, phase) => {
+    const s1 = moving ? Math.sin(t + phase) : 0;
+    const lift = moving ? Math.max(0, s1) : 0;
+    const a1 = -0.55 + s1 * 0.45; // thigh angle from straight down, + = forward
+    const a2 = 0.55 + lift * 0.9; // shin folds forward when the foot lifts
+    const kx = hx + Math.sin(a1) * L1;
+    const ky = Math.cos(a1) * L1;
+    const fx = kx + Math.sin(a2) * L2;
+    const fy = ky + Math.cos(a2) * L2;
+    const thigh = near ? '#c9d2df' : '#8a94a4';
+    const shin = near ? '#aab4c3' : '#6f7988';
+    const joint = near ? '#5a6474' : '#3f4856';
     ctx.lineCap = 'round';
+    // thigh: a chunky actuator arm
+    ctx.strokeStyle = thigh;
+    ctx.lineWidth = 7;
     ctx.beginPath();
-    ctx.moveTo(hx, 2);
+    ctx.moveTo(hx, 0);
     ctx.lineTo(kx, ky);
+    ctx.stroke();
+    // shin: slimmer, down to the foot
+    ctx.strokeStyle = shin;
+    ctx.lineWidth = 4.5;
+    ctx.beginPath();
+    ctx.moveTo(kx, ky);
     ctx.lineTo(fx, fy);
     ctx.stroke();
-    ctx.fillStyle = '#2c3340';
+    // hip and knee motors
+    [[hx, 0, 5], [kx, ky, 3.8]].forEach(([jx, jy, r]) => {
+      ctx.fillStyle = joint;
+      ctx.beginPath();
+      ctx.arc(jx, jy, r, 0, 7);
+      ctx.fill();
+      ctx.fillStyle = near ? '#e3e9f1' : '#aab2bf';
+      ctx.beginPath();
+      ctx.arc(jx, jy, r * 0.45, 0, 7);
+      ctx.fill();
+    });
+    // rubber foot pad
+    ctx.fillStyle = '#20262f';
     ctx.beginPath();
-    ctx.arc(fx, fy + 1, 3.2, 0, 7);
+    ctx.ellipse(fx + 1, fy + 1, 4.2, 2.8, 0, 0, 7);
     ctx.fill();
-    void i;
-  });
+  };
+  legs.filter((l) => !l[1]).forEach(([hx, near, ph]) => leg(hx, near, ph));
 
-  // body
+  // chassis
   const bob = moving ? Math.sin(t * 2) * 1.2 : 0;
+  ctx.save();
   ctx.translate(0, bob);
+  ctx.fillStyle = '#5a6474';
+  rr(-33, -8, 66, 18, 7); // underbody
+  ctx.fill();
   ctx.fillStyle = '#dfe5ee';
-  rr(-30, -12, 60, 22, 9);
+  rr(-32, -16, 64, 20, 8); // main body
   ctx.fill();
+  ctx.fillStyle = '#c3ccd9';
+  rr(-32, -6, 64, 10, 6); // lower panel
+  ctx.fill();
+  // panel seams and side vents
+  ctx.strokeStyle = 'rgba(40,48,60,0.45)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(-10, -16);
+  ctx.lineTo(-10, 4);
+  ctx.moveTo(10, -16);
+  ctx.lineTo(10, 4);
+  ctx.stroke();
+  ctx.fillStyle = '#3b4454';
+  for (let k = 0; k < 3; k++) ctx.fillRect(-26 + k * 5, -3, 2.5, 6);
+  // status LEDs on the flank
+  ctx.fillStyle = '#3ddc84';
+  ctx.beginPath();
+  ctx.arc(-18, -11, 1.6, 0, 7);
+  ctx.fill();
+  ctx.fillStyle = Math.floor(now / 400) % 2 ? '#ffd84d' : '#6a5a1e';
+  ctx.beginPath();
+  ctx.arc(-13, -11, 1.6, 0, 7);
+  ctx.fill();
+  // sensor head out front: a visor with a lens array and a depth camera
   ctx.fillStyle = '#b8c1cf';
-  rr(-30, -2, 60, 12, 8);
+  rr(24, -10, 8, 8, 2); // neck block
   ctx.fill();
-  // head, out front
   ctx.fillStyle = '#e8edf4';
-  rr(22, -18, 22, 16, 6);
+  rr(28, -20, 22, 16, 6);
   ctx.fill();
-  ctx.fillStyle = '#1a2030';
-  rr(30, -15, 12, 7, 3);
+  ctx.fillStyle = '#141a26';
+  rr(34, -17, 14, 8, 3);
   ctx.fill();
   ctx.fillStyle = '#7ef0ff';
-  ctx.fillRect(33, -14, 7, 4);
-  // tail stub
-  ctx.strokeStyle = '#b8c1cf';
-  ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.moveTo(-30, -8);
-  ctx.lineTo(-38, -16);
-  ctx.stroke();
+  ctx.arc(44, -13, 2.2, 0, 7);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(126,240,255,0.5)';
+  ctx.beginPath();
+  ctx.arc(38, -13, 1.5, 0, 7);
+  ctx.fill();
+  ctx.fillStyle = '#20262f';
+  ctx.beginPath();
+  ctx.arc(31, -8, 1.8, 0, 7); // side camera
+  ctx.fill();
   // tool mount on the back
   if (o) {
+    ctx.fillStyle = '#8f99a8';
+    rr(-14, -20, 28, 5, 2); // rail
+    ctx.fill();
     ctx.fillStyle = o.color;
-    rr(-12, -26, 24, 16, 5);
+    rr(-12, -32, 24, 16, 5);
     ctx.fill();
     ctx.save();
     ctx.scale(facing, 1);
-    text(o.letter, 0, -17, 14, '#141821', 'center', 800);
+    text(o.letter, 0, -23, 14, '#141821', 'center', 800);
     ctx.restore();
   } else {
+    ctx.fillStyle = '#8f99a8';
+    rr(-14, -20, 28, 5, 2);
+    ctx.fill();
     ctx.strokeStyle = '#8f99a8';
     ctx.setLineDash([3, 3]);
     ctx.lineWidth = 2;
-    rr(-12, -26, 24, 16, 5);
+    rr(-12, -32, 24, 16, 5);
     ctx.stroke();
     ctx.setLineDash([]);
   }
+  ctx.restore();
+
+  legs.filter((l) => l[1]).forEach(([hx, near, ph]) => leg(hx, near, ph));
   ctx.restore();
 }
 
