@@ -757,19 +757,26 @@ function drawBot(x, y, outfit, scale = 1, opts = {}) {
 // Characters. Feet at y, about 70px tall at scale 1. Limbs swing when
 // `moving`; `facing` is 1 for right, -1 for left. The seat colour shows up
 // as a band or accessory so you can still tell players apart.
-function drawCharacter(id, x, y, scale, color, facing = 1, now = 0, moving = false) {
+// Characters that sit in a chair roll instead of walking.
+const SPRITE_ROLLS = { autist: true, degen: true };
+
+function drawCharacter(id, x, y, scale, color, facing = 1, now = 0, moving = false, vertical = false) {
   ctx.save();
   ctx.translate(x, y);
   ctx.scale(scale * facing, scale);
   const t = now / 95;
-  const sw = moving ? Math.sin(t) : 0; // limb swing, -1..1
-  const bob = moving ? Math.abs(Math.sin(t)) * 2 : 0;
+  const sw = moving && !vertical ? Math.sin(t) : 0; // limb swing, -1..1
+  const bob = moving ? Math.abs(Math.sin(t)) * (vertical ? 3 : 2) : 0;
   const sprite = SPRITES[id];
   if (sprite) {
     // Cut-out art: feet on the origin, 78px tall at scale 1, standing on a
-    // ring in the player's colour. Walking is a bob and a little lean.
+    // ring in the player's colour. The picture is cut into torso, arms and
+    // legs that swing from the shoulders and hips when walking.
     const H = 78;
-    const W = (H * sprite.width) / sprite.height;
+    const spw = sprite.width;
+    const sph = sprite.height;
+    const k = H / sph;
+    const W = spw * k;
     ctx.fillStyle = color;
     ctx.globalAlpha = 0.8;
     ctx.beginPath();
@@ -780,11 +787,71 @@ function drawCharacter(id, x, y, scale, color, facing = 1, now = 0, moving = fal
     ctx.ellipse(0, 3, W * 0.42, 5, 0, 0, 7);
     ctx.fill();
     ctx.globalAlpha = 1;
-    if (moving) {
-      ctx.translate(0, -Math.abs(Math.sin(t)) * 3);
-      ctx.rotate(Math.sin(t) * 0.07);
+    ctx.translate(-W / 2, -H);
+    ctx.scale(k, k);
+    // Draw one rectangle of the picture, turned by rot about the pivot.
+    const part = (rx, ry, rw, rh, px, py, rot, dx = 0, dy = 0) => {
+      ctx.save();
+      ctx.translate(px + dx, py + dy);
+      ctx.rotate(rot);
+      ctx.drawImage(sprite, rx, ry, rw, rh, rx - px, ry - py, rw, rh);
+      ctx.restore();
+    };
+    const s = Math.sin(t);
+    if (!moving) {
+      ctx.drawImage(sprite, 0, 0);
+    } else if (SPRITE_ROLLS[id]) {
+      if (vertical) {
+        // bouncing along on the castors
+        const b = Math.abs(Math.sin(t * 1.5));
+        part(0, 0, spw, sph, spw / 2, sph, (b - 0.5) * 0.06, 0, (-b * 10) / k);
+      } else {
+        // leaning into it, wheels chattering, speed lines behind
+        ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+        ctx.lineWidth = 3 / k;
+        for (let i = 0; i < 3; i++) {
+          const yy = sph * (0.45 + i * 0.15);
+          ctx.beginPath();
+          ctx.moveTo(-6 / k, yy);
+          ctx.lineTo(-(22 + ((now / 30 + i * 9) % 14)) / k, yy);
+          ctx.stroke();
+        }
+        part(0, 0, spw, sph, spw / 2, sph, 0.1 + Math.sin(t * 3) * 0.02, 0, (Math.sin(t * 3) * 1.5) / k);
+      }
+    } else {
+      const hipY = sph * 0.62;
+      const shoulderY = sph * 0.3;
+      const armW = spw * 0.26;
+      const legH = sph - hipY;
+      const armH = hipY - shoulderY + sph * 0.1;
+      if (vertical) {
+        // stepping up or down the screen: legs lift in turn, body sways
+        const dy = (-Math.abs(s) * 3) / k;
+        part(0, hipY, spw / 2, legH, spw * 0.28, hipY, s * 0.08, 0, dy - (Math.max(0, s) * 7) / k);
+        part(spw / 2, hipY, spw / 2, legH, spw * 0.72, hipY, s * 0.08, 0, dy - (Math.max(0, -s) * 7) / k);
+        ctx.save();
+        ctx.translate(spw / 2, hipY + dy);
+        ctx.rotate(s * 0.05);
+        ctx.translate(-spw / 2, -hipY);
+        part(0, 0, spw, hipY + sph * 0.08, 0, 0, 0);
+        part(0, shoulderY, armW, armH, armW, shoulderY, -s * 0.12);
+        part(spw - armW, shoulderY, armW, armH, spw - armW, shoulderY, s * 0.12);
+        ctx.restore();
+      } else {
+        // a proper stride: legs scissor from the hips, arms swing the other way
+        const dy = (-Math.abs(s) * 4) / k;
+        part(0, hipY, spw / 2, legH, spw * 0.28, hipY, s * 0.38, 0, dy);
+        part(spw / 2, hipY, spw / 2, legH, spw * 0.72, hipY, -s * 0.38, 0, dy);
+        ctx.save();
+        ctx.translate(spw / 2, hipY + dy);
+        ctx.rotate(0.07);
+        ctx.translate(-spw / 2, -hipY);
+        part(0, 0, spw, hipY + sph * 0.08, 0, 0, 0);
+        part(0, shoulderY, armW, armH, armW, shoulderY, -s * 0.3);
+        part(spw - armW, shoulderY, armW, armH, spw - armW, shoulderY, s * 0.3);
+        ctx.restore();
+      }
     }
-    ctx.drawImage(sprite, -W / 2, -H, W, H);
     ctx.restore();
     return;
   }
@@ -1207,8 +1274,8 @@ function drawCharacter(id, x, y, scale, color, facing = 1, now = 0, moving = fal
   ctx.restore();
 }
 
-function drawWalker(x, y, color, isAI, facing, charId, now = 0, moving = false) {
-  drawCharacter(charId || (isAI ? 'hedgie' : 'ape'), x, y + 34, 1, color, facing, now, moving);
+function drawWalker(x, y, color, isAI, facing, charId, now = 0, moving = false, vertical = false, scale = 1) {
+  drawCharacter(charId || (isAI ? 'hedgie' : 'ape'), x, y + 34, scale, color, facing, now, moving, vertical);
 }
 
 function drawCoin(x, y, now) {
@@ -2029,9 +2096,9 @@ function drawTown(now) {
     text(l2, lx, midY + 16, 15, '#9aa7bd', 'center', 500);
   });
 
-  if (tu.hasBot) drawBot(tu.bx, tu.by, tu.outfit, 0.9, { now, moving: tu.moving, facing: tu.facing });
-  drawWalker(tu.x, tu.y, PCOL[tu.seat], p.kind === 'ai', tu.facing, p.char, now, tu.moving);
-  if (tu.assay === 'have-sample') text('🧪', tu.x + 34, tu.y - 40, 30, '#fff', 'center');
+  if (tu.hasBot) drawBot(tu.bx, tu.by, tu.outfit, 1.3, { now, moving: tu.moving, facing: tu.facing });
+  drawWalker(tu.x, tu.y, PCOL[tu.seat], p.kind === 'ai', tu.facing, p.char, now, tu.moving, tu.vertical, 1.75);
+  if (tu.assay === 'have-sample') text('🧪', tu.x + 50, tu.y - 90, 34, '#fff', 'center');
 }
 
 // ---------- HUD ----------
@@ -2638,8 +2705,8 @@ function drawGame(now) {
     if (tu.scene === 'town') drawTown(now);
     else {
       drawMap(now);
-      if (tu.hasBot) drawBot(tu.bx, tu.by, tu.outfit, 0.9, { now, moving: tu.moving, facing: tu.facing });
-      drawWalker(tu.x, tu.y, PCOL[tu.seat], p.kind === 'ai', tu.facing, p.char, now, tu.moving);
+      if (tu.hasBot) drawBot(tu.bx, tu.by, tu.outfit, 1.3, { now, moving: tu.moving, facing: tu.facing });
+      drawWalker(tu.x, tu.y, PCOL[tu.seat], p.kind === 'ai', tu.facing, p.char, now, tu.moving, tu.vertical, 1.75);
       if (tu.assay === 'have-sample') text('🧪', tu.x + 34, tu.y - 40, 30, '#fff', 'center');
       game.runaways.forEach((r) => {
         const wob = Math.sin(now / 45) * 9;

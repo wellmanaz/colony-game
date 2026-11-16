@@ -775,6 +775,7 @@ function updateWalk(s, inputs, dt) {
   }
   const moving = mag > 0.1;
   tu.moving = moving;
+  tu.vertical = Math.abs(iy) > Math.abs(ix);
   const oldX = tu.x;
   const oldY = tu.y;
   tu.x += ix * WALK_SPEED * dt;
@@ -1152,7 +1153,10 @@ function updateAuction(s, inputs, dt) {
       if (!a.active[i]) return;
       const inp = inputs[i];
       if (inp.b) {
+        // Done: back right off the floor so nobody can trade against you.
         a.active[i] = false;
+        a.bounced[i] = 'backed off';
+        a.price[i] = a.roles[i] === 'buy' ? 0 : a.axisMax;
         return;
       }
       let np = a.price[i] - inp.y * PRICE_SPEED * dt;
