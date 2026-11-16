@@ -165,13 +165,11 @@ export function isExchange(c, r) {
 export function yieldFor(tile, outfitId) {
   const lvl = tile.level;
   // The Dip (river valley) feeds you; the Solar Flats power you; Silicon
-  // Ridge makes chips; diamonds are only ever found in the impact craters.
-  if (outfitId === 'diamonds') return tile.type === 'crater' ? tile.dia : 0;
+  // Ridge makes chips; diamonds are hidden anywhere but the Dip.
+  if (outfitId === 'diamonds') return tile.type === 'dip' ? 0 : tile.dia;
   switch (tile.type) {
     case 'dip':
       return { tendies: 4, fuel: 1, chips: 0 }[outfitId];
-    case 'crater':
-      return { tendies: 0, fuel: 2, chips: 0 }[outfitId];
     case 'ridge':
       return { tendies: 0, fuel: 1, chips: 1 + lvl }[outfitId];
     default:
@@ -273,29 +271,18 @@ export function makeMap(rng) {
     makeRidge(open[Math.floor(rng() * open.length)]);
     placed++;
   }
-  // Impact craters: a field of seven where there is room, and the only
-  // place diamonds are found. One of them is the rich one.
-  const cands = tiles.filter((t) => plain(t.c, t.r));
-  const busy = tiles.filter((t) => t.exchange || t.type !== 'plain');
-  const dist = (a, b) => Math.hypot(a.c - b.c, a.r - b.r);
-  let centre = cands[0];
-  let best = -1;
-  for (let i = 0; i < 25; i++) {
-    const t = cands[Math.floor(rng() * cands.length)];
-    const d = Math.min(...busy.map((b) => dist(t, b)));
-    if (d > best) {
-      best = d;
-      centre = t;
-    }
-  }
-  cands
-    .map((t) => ({ t, d: dist(t, centre) + rng() * 0.8 }))
-    .sort((a, b) => a.d - b.d)
-    .slice(0, 7)
-    .forEach(({ t }, i) => {
-      t.type = 'crater';
-      t.dia = i === 0 ? 3 : 1 + Math.floor(rng() * 3);
-    });
+  // Hidden diamonds, as in the original: a vein with one rich plot, its
+  // neighbours medium, and a few small deposits scattered anywhere but
+  // the Dip. Only an assay tells you which is which.
+  const cand = tiles.filter((t) => !t.exchange && t.type !== 'dip');
+  const seam = cand[Math.floor(rng() * cand.length)];
+  seam.dia = 3;
+  neighbours({ tiles }, seam).forEach((n) => {
+    if (!n.exchange && n.type !== 'dip') n.dia = Math.max(n.dia, 2);
+  });
+  cand.forEach((t) => {
+    if (t.dia === 0 && rng() < 0.2) t.dia = 1;
+  });
   return tiles;
 }
 
@@ -464,7 +451,7 @@ function updateClaim(s, inputs, dt) {
 // ---------- land auction ----------
 
 export function lotMinimum(s, t) {
-  const base = { plain: 250, crater: 300, ridge: 250 + 75 * t.level, dip: 450 }[t.type];
+  const base = { plain: 250, ridge: 250 + 75 * t.level, dip: 450 }[t.type];
   return base + (s.round - 1) * 10;
 }
 

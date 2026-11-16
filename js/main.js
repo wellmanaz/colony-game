@@ -1322,7 +1322,7 @@ function tileHash(t, n) {
 
 // The map is painted once per game into an offscreen canvas as one
 // continuous landscape: the river valley of the Dip, the Silicon Ridge
-// mountain range, the crater field and the sun-baked flats, with faint
+// mountain range and the sun-baked flats, with faint
 // survey lines marking the plots. Ownership, bots and anything that moves
 // are drawn over it every frame.
 let terrain = { key: '', canvas: null };
@@ -1515,62 +1515,6 @@ function paintLandscape(g, tiles, salt) {
     }
   });
   peaks.sort((a, b) => a.y - b.y).forEach((p) => peak(p.x, p.y, p.h, p.w, p.snow ? '#a39bb3' : '#7d7589', p.snow ? '#6d6579' : '#55505f', p.snow));
-
-  // ---- impact craters: rays first, then the bowls ----
-  const craters = tiles.filter((t) => t.type === 'crater').map((t) => ({ t, x: cx(t) + (rand() - 0.5) * 16, y: cy(t) + (rand() - 0.5) * 10, r: 44 + rand() * 10 }));
-  craters.forEach(({ x, y, r }) => {
-    const halo = g.createRadialGradient(x, y, r, x, y, r * 2.6);
-    halo.addColorStop(0, 'rgba(235,238,245,0.16)');
-    halo.addColorStop(1, 'rgba(235,238,245,0)');
-    g.fillStyle = halo;
-    g.beginPath();
-    g.arc(x, y, r * 2.6, 0, 7);
-    g.fill();
-    const rays = 8 + Math.floor(rand() * 5);
-    for (let i = 0; i < rays; i++) {
-      const a = rand() * Math.PI * 2;
-      const len = r * (0.7 + rand() * 1.3);
-      g.strokeStyle = `rgba(240,242,248,${0.07 + rand() * 0.12})`;
-      g.lineWidth = 1.5 + rand() * 2.5;
-      g.beginPath();
-      g.moveTo(x + Math.cos(a) * r * 1.1, y + Math.sin(a) * r * 0.72);
-      g.lineTo(x + Math.cos(a) * (r * 1.1 + len), y + Math.sin(a) * (r * 0.72 + len * 0.7));
-      g.stroke();
-    }
-  });
-  const crater = (x, y, rx) => {
-    const ry = rx * 0.64;
-    g.fillStyle = '#767b89';
-    g.beginPath();
-    g.ellipse(x, y + 2, rx * 1.24, ry * 1.3, 0, 0, 7);
-    g.fill();
-    g.fillStyle = '#4b505c';
-    g.beginPath();
-    g.ellipse(x, y + 6, rx * 1.24, ry * 1.3, 0, 0, Math.PI);
-    g.fill();
-    const bowl = g.createRadialGradient(x - rx * 0.25, y - ry * 0.25, rx * 0.1, x, y, rx);
-    bowl.addColorStop(0, '#343845');
-    bowl.addColorStop(0.7, '#23262e');
-    bowl.addColorStop(1, '#171920');
-    g.fillStyle = bowl;
-    g.beginPath();
-    g.ellipse(x, y, rx, ry, 0, 0, 7);
-    g.fill();
-    g.strokeStyle = 'rgba(255,255,255,0.32)';
-    g.lineWidth = 3;
-    g.beginPath();
-    g.ellipse(x, y, rx - 1, ry - 1, 0, Math.PI * 1.1, Math.PI * 1.9);
-    g.stroke();
-    g.strokeStyle = 'rgba(0,0,0,0.5)';
-    g.lineWidth = 4;
-    g.beginPath();
-    g.ellipse(x, y, rx - 2, ry - 2, 0, Math.PI * 0.15, Math.PI * 0.85);
-    g.stroke();
-  };
-  craters.forEach(({ t, x, y, r }) => {
-    crater(x, y, r);
-    for (let i = 0; i < 2; i++) crater(t.c * TW + 18 + rand() * (TW - 36), t.r * TH + 14 + rand() * (TH - 28), 6 + rand() * 7);
-  });
 
   // ---- The Dip: a river through a green valley ----
   const dip = tiles.filter((t) => t.type === 'dip').sort((a, b) => a.c - b.c);
@@ -2531,7 +2475,7 @@ function drawLand(now) {
   }
   else if (t.bot >= 0) drawBot((C.TILE_W - 6) / 2, (C.TILE_H - 6) / 2 + 12, t.bot, 1.05, { now });
   ctx.restore();
-  const kind = { plain: 'Solar Flats', dip: 'The Dip', crater: 'Impact crater', ridge: `Silicon Ridge, ${t.level} peak${t.level > 1 ? 's' : ''}` }[t.type];
+  const kind = { plain: 'Solar Flats', dip: 'The Dip', ridge: `Silicon Ridge, ${t.level} peak${t.level > 1 ? 's' : ''}` }[t.type];
   text(kind, px + 60 + (C.TILE_W - 6), py + 420, 30, '#f1f4f8', 'center', 800);
   text(`row ${t.r + 1}, column ${t.c + 1}`, px + 60 + (C.TILE_W - 6), py + 456, 20, '#9aa7bd', 'center', 500);
   text(lot.seller >= 0 ? `Sold by ${game.players[lot.seller].name}` : 'Released by the Exchange', px + 60 + (C.TILE_W - 6), py + 488, 20, '#9aa7bd', 'center', 500);
@@ -2835,7 +2779,7 @@ function drawLobby() {
   const lines = [
     'Each round: grab land → take turns buying and placing bots → production → trading floor',
     'Every turn you eat tendies (3, later 5) and each non-fuel bot burns 1 fuel · run short and your turn gets shorter',
-    'The Dip feeds you · the Solar Flats power you · Silicon Ridge makes chips · diamonds hide in the craters, assay to find them',
+    'The Dip feeds you · the Solar Flats power you · Silicon Ridge makes chips · diamonds are hidden anywhere, assay to find them',
     `Y or M toggles music${music.muted ? ' (muted)' : ''}${music.custom ? '' : ' (built-in loop)'} · Keyboard: Space = A, B = B, X = X, P = LB, O = RB, Enter = Menu, arrows move · On Xbox, if the controllers do nothing, switch the browser to controller mode`,
   ];
   lines.forEach((l, k) => text(l, W / 2, 818 + k * 36, k === 3 ? 20 : 23, k === 3 ? '#7f8ba1' : '#c8d2e3', 'center', 500));
