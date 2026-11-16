@@ -164,12 +164,14 @@ export function isExchange(c, r) {
 // Base units a plot produces per round with a given outfit, before bonuses.
 export function yieldFor(tile, outfitId) {
   const lvl = tile.level;
-  if (outfitId === 'diamonds') return tile.type === 'dip' ? 0 : tile.dia;
+  // The Dip (river valley) feeds you; the Solar Flats power you; Silicon
+  // Ridge makes chips; diamonds are only ever found in the impact craters.
+  if (outfitId === 'diamonds') return tile.type === 'crater' ? tile.dia : 0;
   switch (tile.type) {
     case 'dip':
-      return { tendies: 4, fuel: 2, chips: 0 }[outfitId];
+      return { tendies: 4, fuel: 1, chips: 0 }[outfitId];
     case 'crater':
-      return { tendies: 0, fuel: 4, chips: 0 }[outfitId];
+      return { tendies: 0, fuel: 2, chips: 0 }[outfitId];
     case 'ridge':
       return { tendies: 0, fuel: 1, chips: 1 + lvl }[outfitId];
     default:
@@ -243,29 +245,57 @@ export function makeMap(rng) {
     if (isExchange(c, row)) row = row === 2 ? 1 : 4;
     tiles[tileIndex(c, row)].type = 'dip';
   }
-  const place = (count, type) => {
-    let placed = 0;
-    let guard = 0;
-    while (placed < count && guard++ < 1000) {
-      const t = tiles[Math.floor(rng() * tiles.length)];
-      if (t.exchange || t.type !== 'plain') continue;
-      t.type = type;
-      if (type === 'ridge') t.level = 1 + Math.floor(rng() * 3);
+  const plain = (c, r) => {
+    const t = tiles[tileIndex(c, r)];
+    return !t.exchange && t.type === 'plain';
+  };
+  const makeRidge = (t) => {
+    t.type = 'ridge';
+    t.level = 1 + Math.floor(rng() * 3);
+  };
+  // Silicon Ridge: a mountain range running top to bottom on whichever
+  // side of the map the Dip leaves free, eight plots in all.
+  const base = c0 <= 2 ? COLS - 2 : 1;
+  let placed = 0;
+  for (let r = 0; r < ROWS; r++) {
+    const c = Math.max(0, Math.min(COLS - 1, base + (rng() < 0.4 ? (rng() < 0.5 ? -1 : 1) : 0)));
+    if (plain(c, r)) {
+      makeRidge(tiles[tileIndex(c, r)]);
       placed++;
     }
-  };
-  place(9, 'ridge');
-  place(9, 'crater');
-  // Hidden diamonds: a rich seam of 3 next to a few 2s and 1s.
-  const cand = tiles.filter((t) => !t.exchange && t.type !== 'dip');
-  const seam = cand[Math.floor(rng() * cand.length)];
-  seam.dia = 3;
-  neighbours({ tiles }, seam).forEach((n) => {
-    if (!n.exchange && n.type !== 'dip') n.dia = Math.max(n.dia, 2);
-  });
-  cand.forEach((t) => {
-    if (t.dia === 0 && rng() < 0.2) t.dia = 1;
-  });
+  }
+  let guard = 0;
+  while (placed < 8 && guard++ < 200) {
+    const ridges = tiles.filter((t) => t.type === 'ridge');
+    const from = ridges[Math.floor(rng() * ridges.length)];
+    const open = neighbours({ tiles }, from).filter((t) => plain(t.c, t.r));
+    if (!open.length) continue;
+    makeRidge(open[Math.floor(rng() * open.length)]);
+    placed++;
+  }
+  // Impact craters: a field of seven where there is room, and the only
+  // place diamonds are found. One of them is the rich one.
+  const cands = tiles.filter((t) => plain(t.c, t.r));
+  const busy = tiles.filter((t) => t.exchange || t.type !== 'plain');
+  const dist = (a, b) => Math.hypot(a.c - b.c, a.r - b.r);
+  let centre = cands[0];
+  let best = -1;
+  for (let i = 0; i < 25; i++) {
+    const t = cands[Math.floor(rng() * cands.length)];
+    const d = Math.min(...busy.map((b) => dist(t, b)));
+    if (d > best) {
+      best = d;
+      centre = t;
+    }
+  }
+  cands
+    .map((t) => ({ t, d: dist(t, centre) + rng() * 0.8 }))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, 7)
+    .forEach(({ t }, i) => {
+      t.type = 'crater';
+      t.dia = i === 0 ? 3 : 1 + Math.floor(rng() * 3);
+    });
   return tiles;
 }
 

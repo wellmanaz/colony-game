@@ -22,7 +22,7 @@ export function makeAI() {
 }
 
 function knownYield(s, tile, outfit, seat) {
-  if (outfit === 3 && !tile.assayed) return tile.type === 'dip' ? 0 : 0.7;
+  if (outfit === 3 && !tile.assayed) return tile.type === 'crater' ? 1.6 : 0;
   return C.expectedYield(s, tile, outfit, seat);
 }
 
@@ -198,7 +198,7 @@ function walkTurn(s, seat, mem, inp, dt) {
       }
     }
     if (tu.assay === 'none' && !mem.assayDone && tu.t > 14 && s.round <= 8 && mem.assayUrge) {
-      const cand = s.tiles.filter((t) => !t.exchange && !t.assayed && t.type !== 'dip' && t.owner < 0);
+      const cand = s.tiles.filter((t) => !t.exchange && !t.assayed && t.type === 'crater' && t.owner < 0);
       if (cand.length) {
         let best = cand[0];
         let bestD = Infinity;

@@ -1253,193 +1253,426 @@ function tileHash(t, n) {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
-function paintTerrain(t, x, y, w, h) {
-  const base = { plain: '#555b68', dip: '#2c6152', crater: '#474c59', ridge: '#655f6e' }[t.type];
-  ctx.fillStyle = base;
-  rr(x, y, w, h, 10);
-  ctx.fill();
-  ctx.save();
-  rr(x, y, w, h, 10);
-  ctx.clip();
+// The map is painted once per game into an offscreen canvas as one
+// continuous landscape: the river valley of the Dip, the Silicon Ridge
+// mountain range, the crater field and the sun-baked flats, with faint
+// survey lines marking the plots. Ownership, bots and anything that moves
+// are drawn over it every frame.
+let terrain = { key: '', canvas: null };
 
-  // ground texture: faint speckle on every tile
-  for (let i = 0; i < 14; i++) {
-    const px = x + tileHash(t, i) * w;
-    const py = y + tileHash(t, i + 40) * h;
-    const r = 1 + tileHash(t, i + 80) * 2.2;
-    ctx.fillStyle = tileHash(t, i + 120) > 0.5 ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.18)';
-    ctx.beginPath();
-    ctx.arc(px, py, r, 0, 7);
-    ctx.fill();
+function terrainCanvas() {
+  const key = game.salt + ':' + game.tiles.map((t) => t.type[0] + t.level).join('');
+  if (terrain.key !== key) {
+    const cv = document.createElement('canvas');
+    cv.width = C.MAP_W;
+    cv.height = C.MAP_H;
+    paintLandscape(cv.getContext('2d'), game.tiles, game.salt);
+    terrain = { key, canvas: cv };
+  }
+  return terrain.canvas;
+}
+
+function rrectPath(g, x, y, w, h, r) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+
+function paintLandscape(g, tiles, salt) {
+  const W = C.MAP_W;
+  const H = C.MAP_H;
+  const TW = C.TILE_W;
+  const TH = C.TILE_H;
+  let seed = (salt * 2654435761) >>> 0;
+  const rand = () => {
+    seed = (seed + 0x6d2b79f5) >>> 0;
+    let z = seed;
+    z = Math.imul(z ^ (z >>> 15), z | 1);
+    z ^= z + Math.imul(z ^ (z >>> 7), z | 61);
+    return ((z ^ (z >>> 14)) >>> 0) / 4294967296;
+  };
+  const cx = (t) => t.c * TW + TW / 2;
+  const cy = (t) => t.r * TH + TH / 2;
+
+  g.save();
+  rrectPath(g, 0, 0, W, H, 18);
+  g.clip();
+
+  // ---- regolith: the sun-baked flats everywhere ----
+  const base = g.createLinearGradient(0, 0, W, H);
+  base.addColorStop(0, '#5d6270');
+  base.addColorStop(1, '#444956');
+  g.fillStyle = base;
+  g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 46; i++) {
+    const x = rand() * W;
+    const y = rand() * H;
+    const r = 70 + rand() * 170;
+    const rg = g.createRadialGradient(x, y, 0, x, y, r);
+    rg.addColorStop(0, rand() > 0.5 ? 'rgba(255,240,210,0.07)' : 'rgba(0,0,0,0.11)');
+    rg.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = rg;
+    g.beginPath();
+    g.arc(x, y, r, 0, 7);
+    g.fill();
+  }
+  for (let i = 0; i < 3200; i++) {
+    g.fillStyle = rand() > 0.5 ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.17)';
+    g.beginPath();
+    g.arc(rand() * W, rand() * H, 0.6 + rand() * 1.8, 0, 7);
+    g.fill();
+  }
+  g.strokeStyle = 'rgba(0,0,0,0.22)';
+  g.lineWidth = 1.5;
+  for (let i = 0; i < 34; i++) {
+    let x = rand() * W;
+    let y = rand() * H;
+    g.beginPath();
+    g.moveTo(x, y);
+    for (let k = 0; k < 6; k++) {
+      x += (rand() - 0.5) * 70;
+      y += (rand() - 0.5) * 70;
+      g.lineTo(x, y);
+    }
+    g.stroke();
   }
 
-  if (t.type === 'plain') {
-    // a few small rocks and a faint dust drift
-    for (let i = 0; i < 3; i++) {
-      const px = x + 20 + tileHash(t, i + 7) * (w - 40);
-      const py = y + 20 + tileHash(t, i + 17) * (h - 40);
-      const r = 4 + tileHash(t, i + 27) * 5;
-      ctx.fillStyle = '#464c58';
-      ctx.beginPath();
-      ctx.ellipse(px, py, r, r * 0.6, 0, 0, 7);
-      ctx.fill();
-      ctx.fillStyle = '#6a7180';
-      ctx.beginPath();
-      ctx.ellipse(px - r * 0.2, py - r * 0.25, r * 0.5, r * 0.25, 0, 0, 7);
-      ctx.fill();
+  const rock = (x, y, r) => {
+    g.fillStyle = 'rgba(0,0,0,0.3)';
+    g.beginPath();
+    g.ellipse(x + r * 0.3, y + r * 0.35, r * 1.1, r * 0.55, 0, 0, 7);
+    g.fill();
+    g.fillStyle = '#4a505c';
+    g.beginPath();
+    g.ellipse(x, y, r, r * 0.68, 0, 0, 7);
+    g.fill();
+    g.fillStyle = '#7b8292';
+    g.beginPath();
+    g.ellipse(x - r * 0.25, y - r * 0.28, r * 0.5, r * 0.26, -0.3, 0, 7);
+    g.fill();
+  };
+  const panels = (x, y) => {
+    g.save();
+    g.translate(x, y);
+    g.transform(1, 0, -0.35, 1, 0, 0);
+    g.fillStyle = 'rgba(0,0,0,0.3)';
+    g.fillRect(2, 3, 42, 26);
+    g.fillStyle = '#d8dde8';
+    g.fillRect(-2, -2, 42, 26);
+    for (let i = 0; i < 4; i++) {
+      for (let j = 0; j < 2; j++) {
+        g.fillStyle = '#1f3a66';
+        g.fillRect(i * 10, j * 12, 8, 10);
+        g.fillStyle = 'rgba(255,255,255,0.3)';
+        g.fillRect(i * 10, j * 12, 8, 3);
+      }
     }
-    const g = ctx.createLinearGradient(x, y, x + w, y + h);
-    g.addColorStop(0, 'rgba(255,255,255,0.05)');
-    g.addColorStop(1, 'rgba(0,0,0,0.12)');
-    ctx.fillStyle = g;
-    ctx.fillRect(x, y, w, h);
-  } else if (t.type === 'dip') {
-    // a channel of water with banks, ripples and a glint
-    const g = ctx.createLinearGradient(x, y, x, y + h);
-    g.addColorStop(0, '#2b5f4e');
-    g.addColorStop(0.3, '#1d7a63');
-    g.addColorStop(0.5, '#2496a0');
-    g.addColorStop(0.7, '#1d7a63');
-    g.addColorStop(1, '#2b5f4e');
-    ctx.fillStyle = g;
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-    ctx.lineWidth = 3;
-    for (let k = 0; k < 3; k++) {
-      const yy = y + 40 + k * 28;
-      ctx.beginPath();
-      ctx.moveTo(x, yy);
-      ctx.bezierCurveTo(x + w * 0.3, yy - 10, x + w * 0.7, yy + 10, x + w, yy);
-      ctx.stroke();
+    g.restore();
+  };
+  tiles.forEach((t) => {
+    if (t.exchange || t.type !== 'plain') return;
+    const n = 2 + Math.floor(rand() * 3);
+    for (let i = 0; i < n; i++) rock(t.c * TW + 16 + rand() * (TW - 32), t.r * TH + 16 + rand() * (TH - 32), 3 + rand() * 6);
+    if (rand() < 0.4) panels(t.c * TW + 24 + rand() * (TW - 90), t.r * TH + 20 + rand() * (TH - 60));
+  });
+
+  // ---- Silicon Ridge: a plateau with peaks ----
+  const ridges = tiles.filter((t) => t.type === 'ridge');
+  ridges.forEach((t) => {
+    g.fillStyle = 'rgba(0,0,0,0.22)';
+    rrectPath(g, t.c * TW - 4, t.r * TH - 2, TW + 10, TH + 12, 26);
+    g.fill();
+    g.fillStyle = '#5c5566';
+    rrectPath(g, t.c * TW - 6, t.r * TH - 6, TW + 12, TH + 12, 26);
+    g.fill();
+  });
+  ridges.forEach((t) => {
+    for (let i = 0; i < 40; i++) {
+      g.fillStyle = rand() > 0.5 ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.2)';
+      g.beginPath();
+      g.arc(t.c * TW + rand() * TW, t.r * TH + rand() * TH, 1 + rand() * 2.5, 0, 7);
+      g.fill();
     }
-    ctx.fillStyle = 'rgba(255,255,255,0.35)';
-    ctx.beginPath();
-    ctx.ellipse(x + w * 0.65, y + h * 0.42, 14, 3, -0.2, 0, 7);
-    ctx.fill();
-    // green banks top and bottom
-    ctx.fillStyle = '#3f8a5a';
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x + w, y);
-    ctx.lineTo(x + w, y + 14);
-    ctx.quadraticCurveTo(x + w / 2, y + 26, x, y + 14);
-    ctx.closePath();
-    ctx.fill();
-    ctx.beginPath();
-    ctx.moveTo(x, y + h);
-    ctx.lineTo(x + w, y + h);
-    ctx.lineTo(x + w, y + h - 14);
-    ctx.quadraticCurveTo(x + w / 2, y + h - 26, x, y + h - 14);
-    ctx.closePath();
-    ctx.fill();
-    // tufts
-    ctx.strokeStyle = '#6fd08a';
-    ctx.lineWidth = 2;
-    for (let i = 0; i < 6; i++) {
-      const px = x + 10 + tileHash(t, i + 200) * (w - 20);
-      const py = tileHash(t, i + 210) > 0.5 ? y + 12 : y + h - 12;
-      ctx.beginPath();
-      ctx.moveTo(px, py);
-      ctx.lineTo(px - 3, py - 7);
-      ctx.moveTo(px, py);
-      ctx.lineTo(px + 3, py - 8);
-      ctx.stroke();
+  });
+  const peak = (px, baseY, hgt, wid, lit, dark, snow) => {
+    g.fillStyle = 'rgba(0,0,0,0.28)';
+    g.beginPath();
+    g.ellipse(px + 8, baseY + 4, wid * 1.15, 9, 0, 0, 7);
+    g.fill();
+    g.fillStyle = lit;
+    g.beginPath();
+    g.moveTo(px - wid, baseY);
+    g.lineTo(px, baseY - hgt);
+    g.lineTo(px + wid * 0.22, baseY);
+    g.fill();
+    g.fillStyle = dark;
+    g.beginPath();
+    g.moveTo(px, baseY - hgt);
+    g.lineTo(px + wid, baseY);
+    g.lineTo(px + wid * 0.22, baseY);
+    g.fill();
+    if (snow) {
+      const top = baseY - hgt;
+      const s = hgt * 0.3;
+      const k = wid / hgt;
+      g.fillStyle = '#eef0f6';
+      g.beginPath();
+      g.moveTo(px, top);
+      g.lineTo(px - k * s, top + s);
+      g.lineTo(px - k * s * 0.5, top + s * 0.78);
+      g.lineTo(px, top + s * 1.12);
+      g.lineTo(px + k * s * 0.5, top + s * 0.72);
+      g.lineTo(px + k * s, top + s);
+      g.closePath();
+      g.fill();
+      g.strokeStyle = '#a9d8ff';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.moveTo(px - wid * 0.5, baseY - hgt * 0.22);
+      g.lineTo(px - wid * 0.22, baseY - hgt * 0.46);
+      g.lineTo(px - wid * 0.06, baseY - hgt * 0.3);
+      g.stroke();
     }
-  } else if (t.type === 'crater') {
-    [
-      [0.33, 0.42, 32],
-      [0.72, 0.68, 20],
-      [0.75, 0.22, 10],
-    ].forEach(([fx, fy, r]) => {
-      const cx = x + w * fx;
-      const cy = y + h * fy;
-      // raised rim with a lit edge, dark bowl, shadowed far wall
-      ctx.fillStyle = '#5b616e';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy + 2, r * 1.18, r * 0.72, 0, 0, 7);
-      ctx.fill();
-      ctx.fillStyle = '#2c303a';
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, r, r * 0.6, 0, 0, 7);
-      ctx.fill();
-      const g = ctx.createRadialGradient(cx - r * 0.3, cy + r * 0.2, 1, cx, cy, r);
-      g.addColorStop(0, 'rgba(0,0,0,0)');
-      g.addColorStop(1, 'rgba(0,0,0,0.45)');
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, r, r * 0.6, 0, 0, 7);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.ellipse(cx, cy, r, r * 0.6, 0, Math.PI * 1.05, Math.PI * 1.95);
-      ctx.stroke();
-    });
-  } else if (t.type === 'ridge') {
-    // shaded peaks with snow caps and a ground shadow
+  };
+  const peaks = [];
+  ridges.forEach((t) => {
+    // foothills behind, then one proper peak per level
+    for (let i = 0; i < 2; i++) peaks.push({ x: t.c * TW + 30 + rand() * (TW - 60), y: t.r * TH + 40 + rand() * 30, h: 26 + rand() * 14, w: 30, snow: false });
     for (let k = 0; k < t.level; k++) {
-      const px = x + w * (0.25 + k * 0.25) + (tileHash(t, k) - 0.5) * 10;
-      const top = y + 24 + tileHash(t, k + 5) * 12;
-      const baseY = y + h - 20;
-      ctx.fillStyle = 'rgba(0,0,0,0.25)';
-      ctx.beginPath();
-      ctx.ellipse(px + 4, baseY + 4, 34, 7, 0, 0, 7);
-      ctx.fill();
-      // lit face
-      ctx.fillStyle = '#9a93a6';
-      ctx.beginPath();
-      ctx.moveTo(px - 32, baseY);
-      ctx.lineTo(px, top);
-      ctx.lineTo(px + 6, baseY);
-      ctx.fill();
-      // shaded face
-      ctx.fillStyle = '#6e6779';
-      ctx.beginPath();
-      ctx.moveTo(px, top);
-      ctx.lineTo(px + 32, baseY);
-      ctx.lineTo(px + 6, baseY);
-      ctx.fill();
-      // snow cap
-      ctx.fillStyle = '#eef0f6';
-      ctx.beginPath();
-      ctx.moveTo(px, top);
-      ctx.lineTo(px - 9, top + 22);
-      ctx.lineTo(px - 4, top + 18);
-      ctx.lineTo(px, top + 24);
-      ctx.lineTo(px + 5, top + 17);
-      ctx.lineTo(px + 9, top + 22);
-      ctx.closePath();
-      ctx.fill();
-      // a seam of ore
-      ctx.strokeStyle = '#d9b84a';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(px - 12, baseY - 14);
-      ctx.lineTo(px - 4, baseY - 26);
-      ctx.lineTo(px + 2, baseY - 18);
-      ctx.stroke();
+      const px = t.c * TW + TW * (0.5 + (k - (t.level - 1) / 2) * 0.28) + (rand() - 0.5) * 12;
+      peaks.push({ x: px, y: t.r * TH + 78 + rand() * 44, h: 62 + rand() * 30, w: 34 + rand() * 6, snow: true });
+    }
+  });
+  peaks.sort((a, b) => a.y - b.y).forEach((p) => peak(p.x, p.y, p.h, p.w, p.snow ? '#a39bb3' : '#7d7589', p.snow ? '#6d6579' : '#55505f', p.snow));
+
+  // ---- impact craters: rays first, then the bowls ----
+  const craters = tiles.filter((t) => t.type === 'crater').map((t) => ({ t, x: cx(t) + (rand() - 0.5) * 16, y: cy(t) + (rand() - 0.5) * 10, r: 44 + rand() * 10 }));
+  craters.forEach(({ x, y, r }) => {
+    const halo = g.createRadialGradient(x, y, r, x, y, r * 2.6);
+    halo.addColorStop(0, 'rgba(235,238,245,0.16)');
+    halo.addColorStop(1, 'rgba(235,238,245,0)');
+    g.fillStyle = halo;
+    g.beginPath();
+    g.arc(x, y, r * 2.6, 0, 7);
+    g.fill();
+    const rays = 8 + Math.floor(rand() * 5);
+    for (let i = 0; i < rays; i++) {
+      const a = rand() * Math.PI * 2;
+      const len = r * (0.7 + rand() * 1.3);
+      g.strokeStyle = `rgba(240,242,248,${0.07 + rand() * 0.12})`;
+      g.lineWidth = 1.5 + rand() * 2.5;
+      g.beginPath();
+      g.moveTo(x + Math.cos(a) * r * 1.1, y + Math.sin(a) * r * 0.72);
+      g.lineTo(x + Math.cos(a) * (r * 1.1 + len), y + Math.sin(a) * (r * 0.72 + len * 0.7));
+      g.stroke();
+    }
+  });
+  const crater = (x, y, rx) => {
+    const ry = rx * 0.64;
+    g.fillStyle = '#767b89';
+    g.beginPath();
+    g.ellipse(x, y + 2, rx * 1.24, ry * 1.3, 0, 0, 7);
+    g.fill();
+    g.fillStyle = '#4b505c';
+    g.beginPath();
+    g.ellipse(x, y + 6, rx * 1.24, ry * 1.3, 0, 0, Math.PI);
+    g.fill();
+    const bowl = g.createRadialGradient(x - rx * 0.25, y - ry * 0.25, rx * 0.1, x, y, rx);
+    bowl.addColorStop(0, '#343845');
+    bowl.addColorStop(0.7, '#23262e');
+    bowl.addColorStop(1, '#171920');
+    g.fillStyle = bowl;
+    g.beginPath();
+    g.ellipse(x, y, rx, ry, 0, 0, 7);
+    g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.32)';
+    g.lineWidth = 3;
+    g.beginPath();
+    g.ellipse(x, y, rx - 1, ry - 1, 0, Math.PI * 1.1, Math.PI * 1.9);
+    g.stroke();
+    g.strokeStyle = 'rgba(0,0,0,0.5)';
+    g.lineWidth = 4;
+    g.beginPath();
+    g.ellipse(x, y, rx - 2, ry - 2, 0, Math.PI * 0.15, Math.PI * 0.85);
+    g.stroke();
+  };
+  craters.forEach(({ t, x, y, r }) => {
+    crater(x, y, r);
+    for (let i = 0; i < 2; i++) crater(t.c * TW + 18 + rand() * (TW - 36), t.r * TH + 14 + rand() * (TH - 28), 6 + rand() * 7);
+  });
+
+  // ---- The Dip: a river through a green valley ----
+  const dip = tiles.filter((t) => t.type === 'dip').sort((a, b) => a.c - b.c);
+  if (dip.length) {
+    const pts = [];
+    dip.forEach((t, i) => {
+      if (i) {
+        const prev = dip[i - 1];
+        const xe = t.c * TW;
+        if (prev.r === t.r) pts.push({ x: xe, y: cy(t) + (rand() - 0.5) * 24 });
+        else {
+          // an S-bend at the plot edge, so the river stays on its own plots
+          pts.push({ x: xe - 34, y: cy(prev) + (cy(t) - cy(prev)) * 0.12 });
+          pts.push({ x: xe + 34, y: cy(t) - (cy(t) - cy(prev)) * 0.12 });
+        }
+      }
+      pts.push({ x: cx(t), y: cy(t) + (rand() - 0.5) * 14 });
+    });
+    const path = () => {
+      g.beginPath();
+      g.moveTo(pts[0].x, pts[0].y);
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[Math.max(0, i - 1)];
+        const p1 = pts[i];
+        const p2 = pts[i + 1];
+        const p3 = pts[Math.min(pts.length - 1, i + 2)];
+        g.bezierCurveTo(p1.x + (p2.x - p0.x) / 6, p1.y + (p2.y - p0.y) / 6, p2.x - (p3.x - p1.x) / 6, p2.y - (p3.y - p1.y) / 6, p2.x, p2.y);
+      }
+    };
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    const band = (w, col) => {
+      g.strokeStyle = col;
+      g.lineWidth = w;
+      path();
+      g.stroke();
+    };
+    band(112, 'rgba(0,0,0,0.25)');
+    band(104, '#3a7a46');
+    band(92, '#4f9a57');
+    band(82, '#5fae62');
+    band(62, '#2d6b60');
+    band(50, '#2496a0');
+    band(38, '#2fb0b8');
+    band(12, 'rgba(255,255,255,0.14)');
+    // grass texture and bushes along the banks
+    dip.forEach((t) => {
+      for (let i = 0; i < 26; i++) {
+        const px = t.c * TW + rand() * TW;
+        const py = cy(t) + (rand() > 0.5 ? 1 : -1) * (28 + rand() * 20);
+        g.strokeStyle = rand() > 0.5 ? '#7fd38a' : '#3f8a4a';
+        g.lineWidth = 2;
+        g.beginPath();
+        g.moveTo(px, py);
+        g.lineTo(px - 2, py - 7);
+        g.moveTo(px, py);
+        g.lineTo(px + 3, py - 8);
+        g.stroke();
+      }
+      for (let i = 0; i < 3; i++) {
+        const bx = t.c * TW + 20 + rand() * (TW - 40);
+        const by = cy(t) + (rand() > 0.5 ? 1 : -1) * (38 + rand() * 8);
+        const r = 7 + rand() * 6;
+        g.fillStyle = 'rgba(0,0,0,0.3)';
+        g.beginPath();
+        g.ellipse(bx + 3, by + r * 0.6, r * 1.3, r * 0.5, 0, 0, 7);
+        g.fill();
+        [[0, 0, r], [-r * 0.7, r * 0.2, r * 0.75], [r * 0.7, r * 0.25, r * 0.7]].forEach(([ox, oy, rr2]) => {
+          g.fillStyle = '#2f6b3a';
+          g.beginPath();
+          g.arc(bx + ox, by + oy, rr2, 0, 7);
+          g.fill();
+          g.fillStyle = '#4f9a55';
+          g.beginPath();
+          g.arc(bx + ox - rr2 * 0.3, by + oy - rr2 * 0.35, rr2 * 0.5, 0, 7);
+          g.fill();
+        });
+      }
+      // free-range chickens: the ranches are what the Dip is for
+      for (let i = 0; i < 3; i++) {
+        const kx = t.c * TW + 24 + rand() * (TW - 48);
+        const ky = cy(t) + (rand() > 0.5 ? 1 : -1) * (32 + rand() * 12);
+        const f = rand() > 0.5 ? 1 : -1;
+        g.fillStyle = '#f7f7f2';
+        g.beginPath();
+        g.ellipse(kx, ky, 6, 4.5, 0, 0, 7);
+        g.fill();
+        g.beginPath();
+        g.arc(kx + 5 * f, ky - 4, 3, 0, 7);
+        g.fill();
+        g.fillStyle = '#e6433a';
+        g.fillRect(kx + 4 * f - 1, ky - 8, 2, 2);
+        g.fillStyle = '#f0a030';
+        g.beginPath();
+        g.moveTo(kx + 8 * f, ky - 4);
+        g.lineTo(kx + 11 * f, ky - 3);
+        g.lineTo(kx + 8 * f, ky - 2);
+        g.fill();
+      }
+    });
+    // ripples on the water
+    g.strokeStyle = 'rgba(255,255,255,0.22)';
+    g.lineWidth = 1.5;
+    dip.forEach((t) => {
+      for (let i = 0; i < 5; i++) {
+        const px = t.c * TW + 12 + rand() * (TW - 40);
+        const py = cy(t) + (rand() - 0.5) * 30;
+        g.beginPath();
+        g.moveTo(px, py);
+        g.quadraticCurveTo(px + 8, py - 3, px + 16, py);
+        g.stroke();
+      }
+    });
+  }
+
+  // ---- survey lines and stakes marking the plots ----
+  [['rgba(0,0,0,0.28)', 3], ['rgba(255,255,255,0.16)', 1]].forEach(([col, lw]) => {
+    g.strokeStyle = col;
+    g.lineWidth = lw;
+    for (let c = 1; c < C.COLS; c++) {
+      g.beginPath();
+      g.moveTo(c * TW + 0.5, 0);
+      g.lineTo(c * TW + 0.5, H);
+      g.stroke();
+    }
+    for (let r = 1; r < C.ROWS; r++) {
+      g.beginPath();
+      g.moveTo(0, r * TH + 0.5);
+      g.lineTo(W, r * TH + 0.5);
+      g.stroke();
+    }
+  });
+  g.fillStyle = 'rgba(255,255,255,0.35)';
+  for (let c = 0; c <= C.COLS; c++) {
+    for (let r = 0; r <= C.ROWS; r++) {
+      g.beginPath();
+      g.arc(Math.min(W - 2, Math.max(2, c * TW)), Math.min(H - 2, Math.max(2, r * TH)), 2, 0, 7);
+      g.fill();
     }
   }
-  // bevel: light top-left edge, dark bottom-right
-  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.moveTo(x + 10, y + 1);
-  ctx.lineTo(x + w - 10, y + 1);
-  ctx.moveTo(x + 1, y + 10);
-  ctx.lineTo(x + 1, y + h - 10);
-  ctx.stroke();
-  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-  ctx.beginPath();
-  ctx.moveTo(x + 10, y + h - 1);
-  ctx.lineTo(x + w - 10, y + h - 1);
-  ctx.moveTo(x + w - 1, y + 10);
-  ctx.lineTo(x + w - 1, y + h - 10);
-  ctx.stroke();
-  ctx.restore();
-  if (t.assayed) {
-    for (let k = 0; k < 3; k++) drawGem(x + w - 18 - k * 20, y + 16, 8, k < t.dia ? '#c9a4ff' : 'rgba(0,0,0,0.35)');
-  }
+  // sunlight from the top left, shadow towards the far corner
+  const light = g.createLinearGradient(0, 0, W, H);
+  light.addColorStop(0, 'rgba(255,245,220,0.08)');
+  light.addColorStop(1, 'rgba(0,0,0,0.22)');
+  g.fillStyle = light;
+  g.fillRect(0, 0, W, H);
+  const vig = g.createRadialGradient(W / 2, H / 2, H * 0.4, W / 2, H / 2, W * 0.62);
+  vig.addColorStop(0, 'rgba(0,0,0,0)');
+  vig.addColorStop(1, 'rgba(0,0,0,0.35)');
+  g.fillStyle = vig;
+  g.fillRect(0, 0, W, H);
+  g.restore();
+}
+
+// Glints drifting down the river, drawn every frame over the cached map.
+function drawWater(now) {
+  ctx.fillStyle = 'rgba(255,255,255,0.3)';
+  game.tiles.forEach((t) => {
+    if (t.type !== 'dip') return;
+    const x0 = C.MAP_X + t.c * C.TILE_W;
+    const cy = C.MAP_Y + t.r * C.TILE_H + C.TILE_H / 2;
+    for (let i = 0; i < 3; i++) {
+      const u = ((now / 28 + i * 61 + t.c * 37) % C.TILE_W);
+      const y = cy + Math.sin((u + i * 40) / 30) * 9;
+      ctx.beginPath();
+      ctx.ellipse(x0 + u, y, 7, 1.6, 0, 0, 7);
+      ctx.fill();
+    }
+  });
 }
 
 function drawTile(t, now) {
@@ -1448,7 +1681,9 @@ function drawTile(t, now) {
   const y = C.MAP_Y + t.r * C.TILE_H + 3;
   const w = C.TILE_W - 6;
   const h = C.TILE_H - 6;
-  paintTerrain(t, x, y, w, h);
+  if (t.assayed) {
+    for (let k = 0; k < 3; k++) drawGem(x + w - 18 - k * 20, y + 16, 8, k < t.dia ? '#c9a4ff' : 'rgba(0,0,0,0.35)');
+  }
 
   if (t.forSale) {
     ctx.fillStyle = '#ffd84d';
@@ -1491,43 +1726,148 @@ function drawTile(t, now) {
   }
 }
 
-function drawExchange() {
+function drawExchange(now) {
   const x = C.MAP_X + 4 * C.TILE_W + 3;
   const y = C.MAP_Y + 2 * C.TILE_H + 3;
   const w = 2 * C.TILE_W - 6;
   const h = 2 * C.TILE_H - 6;
-  ctx.fillStyle = '#161c2b';
+  // the apron
+  ctx.fillStyle = '#1b2130';
   rr(x, y, w, h, 14);
   ctx.fill();
-  ctx.strokeStyle = '#3ddc84';
-  ctx.lineWidth = 5;
-  ctx.stroke();
-  text('THE EXCHANGE', x + w / 2, y + 44, 34, '#3ddc84', 'center', 800);
-  text('bots · tools · assay · land · bar', x + w / 2, y + 78, 18, '#7f8ba1', 'center', 500);
-  ctx.strokeStyle = '#3ddc84';
+  ctx.save();
+  rr(x, y, w, h, 14);
+  ctx.clip();
+  ctx.fillStyle = 'rgba(255,255,255,0.04)';
+  for (let i = 0; i < 6; i++) ctx.fillRect(x, y + 20 + i * 44, w, 1);
+  ctx.strokeStyle = 'rgba(255,216,77,0.4)';
   ctx.lineWidth = 6;
+  ctx.setLineDash([18, 14]);
+  ctx.beginPath();
+  ctx.moveTo(x, y + h - 10);
+  ctx.lineTo(x + w, y + h - 10);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // the ticker: a neon line glowing across the middle
+  ctx.save();
+  ctx.shadowColor = '#3ddc84';
+  ctx.shadowBlur = 14;
+  ctx.strokeStyle = '#3ddc84';
+  ctx.lineWidth = 4;
   ctx.lineJoin = 'round';
   ctx.beginPath();
   [
-    [0.1, 0.86],
-    [0.25, 0.7],
-    [0.36, 0.78],
-    [0.52, 0.56],
-    [0.64, 0.64],
-    [0.88, 0.4],
+    [0.06, 0.56],
+    [0.2, 0.46],
+    [0.32, 0.52],
+    [0.48, 0.4],
+    [0.6, 0.46],
+    [0.9, 0.31],
   ].forEach(([fx, fy], i) => (i ? ctx.lineTo(x + w * fx, y + h * fy) : ctx.moveTo(x + w * fx, y + h * fy)));
   ctx.stroke();
   ctx.fillStyle = '#3ddc84';
   ctx.beginPath();
-  ctx.moveTo(x + w * 0.93, y + h * 0.34);
-  ctx.lineTo(x + w * 0.82, y + h * 0.38);
-  ctx.lineTo(x + w * 0.9, y + h * 0.48);
+  ctx.moveTo(x + w * 0.95, y + h * 0.27);
+  ctx.lineTo(x + w * 0.84, y + h * 0.29);
+  ctx.lineTo(x + w * 0.9, y + h * 0.39);
   ctx.fill();
+  ctx.restore();
+
+  // the dome, bottom left
+  const dx = x + 96;
+  const dy = y + h - 44;
+  const dr = 64;
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.beginPath();
+  ctx.ellipse(dx + 8, dy + 4, dr + 12, 12, 0, 0, 7);
+  ctx.fill();
+  const dome = ctx.createRadialGradient(dx - dr * 0.35, dy - dr * 0.55, 4, dx, dy, dr);
+  dome.addColorStop(0, '#8ff0bd');
+  dome.addColorStop(0.45, '#2f9d68');
+  dome.addColorStop(1, '#163f2d');
+  ctx.fillStyle = dome;
+  ctx.beginPath();
+  ctx.arc(dx, dy, dr, Math.PI, 0);
+  ctx.closePath();
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctx.lineWidth = 1.5;
+  [0.66, 0.33].forEach((f) => {
+    ctx.beginPath();
+    ctx.arc(dx, dy, dr * f, Math.PI, 0);
+    ctx.stroke();
+  });
+  [1.25, 1.5, 1.75].forEach((a) => {
+    ctx.beginPath();
+    ctx.moveTo(dx, dy);
+    ctx.lineTo(dx + Math.cos(Math.PI * a) * dr, dy + Math.sin(Math.PI * a) * dr);
+    ctx.stroke();
+  });
+  ctx.fillStyle = '#0e1118';
+  rr(dx - 10, dy - 24, 20, 24, 4);
+  ctx.fill();
+  ctx.strokeStyle = '#3ddc84';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  for (let i = 0; i < 4; i++) {
+    const lit = Math.floor(now / 700 + i) % 3 !== 0;
+    ctx.fillStyle = lit ? '#ffd84d' : '#6a5a1e';
+    ctx.fillRect(dx - 54 + i * 14 + (i > 1 ? 44 : 0), dy - 14, 9, 7);
+  }
+  ctx.strokeStyle = '#c8d2e3';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(dx + 34, dy - 54);
+  ctx.lineTo(dx + 34, dy - 92);
+  ctx.stroke();
+  ctx.fillStyle = Math.floor(now / 500) % 2 ? '#ff4d4d' : '#5a1e1e';
+  ctx.beginPath();
+  ctx.arc(dx + 34, dy - 95, 3.5, 0, 7);
+  ctx.fill();
+
+  // the landing pad, bottom right
+  const px = x + w - 92;
+  const py = y + h - 50;
+  ctx.fillStyle = '#262d3c';
+  ctx.beginPath();
+  ctx.ellipse(px, py, 66, 32, 0, 0, 7);
+  ctx.fill();
+  ctx.strokeStyle = '#8a93a8';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.ellipse(px, py, 56, 26, 0, 0, 7);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(px, py, 22, 10, 0, 0, 7);
+  ctx.stroke();
+  text('TT', px, py, 18, '#8a93a8', 'center', 800);
+  for (let i = 0; i < 10; i++) {
+    const a = (i / 10) * Math.PI * 2;
+    const on = Math.floor(now / 140) % 10 === i;
+    ctx.fillStyle = on ? '#ffffff' : '#3ddc84';
+    ctx.beginPath();
+    ctx.arc(px + Math.cos(a) * 62, py + Math.sin(a) * 29, on ? 3.5 : 2.2, 0, 7);
+    ctx.fill();
+  }
+  ctx.restore();
+  ctx.strokeStyle = '#3ddc84';
+  ctx.lineWidth = 5;
+  rr(x, y, w, h, 14);
+  ctx.stroke();
+  text('THE EXCHANGE', x + w / 2, y + 36, 30, '#3ddc84', 'center', 800);
+  text('bots · tools · assay · land · bar', x + w / 2, y + 64, 16, '#9aa7bd', 'center', 500);
 }
 
 function drawMap(now) {
+  ctx.drawImage(terrainCanvas(), C.MAP_X, C.MAP_Y);
+  drawWater(now);
+  ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+  ctx.lineWidth = 2;
+  rr(C.MAP_X, C.MAP_Y, C.MAP_W, C.MAP_H, 18);
+  ctx.stroke();
   game.tiles.forEach((t) => drawTile(t, now));
-  drawExchange();
+  drawExchange(now);
   if (game.coin) drawCoin(game.coin.x, game.coin.y, now);
   if (game.flash) {
     const t = game.tiles[game.flash.tile];
@@ -2103,7 +2443,16 @@ function drawLand(now) {
   ctx.save();
   ctx.translate(px + 60, py + 110);
   ctx.scale(2, 2);
-  paintTerrain(t, 0, 0, C.TILE_W - 6, C.TILE_H - 6);
+  ctx.save();
+  rr(0, 0, C.TILE_W - 6, C.TILE_H - 6, 10);
+  ctx.clip();
+  ctx.drawImage(terrainCanvas(), t.c * C.TILE_W + 3, t.r * C.TILE_H + 3, C.TILE_W - 6, C.TILE_H - 6, 0, 0, C.TILE_W - 6, C.TILE_H - 6);
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 2;
+  rr(0, 0, C.TILE_W - 6, C.TILE_H - 6, 10);
+  ctx.stroke();
+  if (t.assayed) for (let k = 0; k < 3; k++) drawGem(C.TILE_W - 6 - 18 - k * 20, 16, 8, k < t.dia ? '#c9a4ff' : 'rgba(0,0,0,0.35)');
   if (t.bot === 0) drawFoodSign(lot.tile * 7 + game.salt, (C.TILE_W - 6) / 2, (C.TILE_H - 6) / 2 + 4, 92, 78);
   else if (t.bot === 2) drawChipSign(lot.tile * 5 + game.salt, (C.TILE_W - 6) / 2, (C.TILE_H - 6) / 2 + 4, 92, 78);
   if (t.bot === 0 || t.bot === 2) {
@@ -2115,7 +2464,7 @@ function drawLand(now) {
   }
   else if (t.bot >= 0) drawBot((C.TILE_W - 6) / 2, (C.TILE_H - 6) / 2 + 12, t.bot, 1.05, { now });
   ctx.restore();
-  const kind = { plain: 'Plains', dip: 'The Dip', crater: 'Crater', ridge: `Ridge, ${t.level} peak${t.level > 1 ? 's' : ''}` }[t.type];
+  const kind = { plain: 'Solar Flats', dip: 'The Dip', crater: 'Impact crater', ridge: `Silicon Ridge, ${t.level} peak${t.level > 1 ? 's' : ''}` }[t.type];
   text(kind, px + 60 + (C.TILE_W - 6), py + 420, 30, '#f1f4f8', 'center', 800);
   text(`row ${t.r + 1}, column ${t.c + 1}`, px + 60 + (C.TILE_W - 6), py + 456, 20, '#9aa7bd', 'center', 500);
   text(lot.seller >= 0 ? `Sold by ${game.players[lot.seller].name}` : 'Released by the Exchange', px + 60 + (C.TILE_W - 6), py + 488, 20, '#9aa7bd', 'center', 500);
@@ -2386,7 +2735,7 @@ function drawLobby() {
   const lines = [
     'Each round: grab land → take turns buying and placing bots → production → trading floor',
     'Every turn you eat tendies (3, later 5) and each non-fuel bot burns 1 fuel · run short and your turn gets shorter',
-    'The Dip grows tendies · plains and craters pump fuel · ridges mine chips · diamonds are hidden until you assay',
+    'The Dip feeds you · the Solar Flats power you · Silicon Ridge makes chips · diamonds hide in the craters, assay to find them',
     `Y or M toggles music${music.muted ? ' (muted)' : ''}${music.custom ? '' : ' (built-in loop)'} · Keyboard: Space = A, B = B, X = X, P = LB, O = RB, Enter = Menu, arrows move · On Xbox, if the controllers do nothing, switch the browser to controller mode`,
   ];
   lines.forEach((l, k) => text(l, W / 2, 818 + k * 36, k === 3 ? 20 : 23, k === 3 ? '#7f8ba1' : '#c8d2e3', 'center', 500));
