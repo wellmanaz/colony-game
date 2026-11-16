@@ -609,13 +609,14 @@ function startTurn(s, seat) {
     listing: false,
     coinCaught: false,
     idle: 0,
+    // A breather before the clock starts: "Ready, X" then 3, 2, 1, so the
+    // last player's messages can be read and the next one can grab the pad.
+    ready: READY_SECONDS,
   };
   s.coin = null;
-  let msg = `${p.name} — your turn`;
-  if (p.foodShort > 0) msg += ` (short on tendies: ${length}s)`;
-  setBanner(s, msg, 1.4);
   maybePlayerEvent(s, p);
 }
+export const READY_SECONDS = 4;
 
 function bolt(s, tu, reason) {
   const ang = s.rng() * Math.PI * 2;
@@ -764,6 +765,10 @@ function updateWalk(s, inputs, dt) {
   const tu = s.turn;
   const player = s.players[tu.seat];
   const inp = inputs[tu.seat];
+  if (tu.ready > 0) {
+    tu.ready -= dt;
+    return;
+  }
   if (player.kind === 'ai') dt *= AI_SPEED;
 
   let ix = inp.x;

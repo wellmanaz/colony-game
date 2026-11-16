@@ -2700,7 +2700,7 @@ function drawGame(now) {
     else if (tu.assay === 'have-sample') hint = 'Take the sample back to the Assay Office';
     else if (tu.listing) hint = 'A on a plot you own lists it for sale (A again withdraws) · B ends turn';
     else hint = 'Walk into The Exchange for a bot · walk over a Bitcoin to grab it · B ends turn';
-    drawTopBar(`${p.name}: ${hint}`);
+    drawTopBar(tu.ready > 0 ? `${p.name} is up next` : `${p.name}: ${hint}`);
     drawTimer(tu);
     if (tu.scene === 'town') drawTown(now);
     else {
@@ -2719,12 +2719,45 @@ function drawGame(now) {
   drawPanels();
   drawToasts();
 
+  if (game.phase === 'walk' && game.turn.ready > 0) drawReady(game.turn, now);
   if (game.banner) {
     ctx.fillStyle = 'rgba(8,10,16,0.82)';
     ctx.fillRect(0, 440, W, 170);
     text(game.banner.text, W / 2, 525, 64, '#ffffff', 'center', 800);
   }
 }
+
+// "Ready, X" then 3, 2, 1 before a turn starts.
+function drawReady(tu, now) {
+  const p = game.players[tu.seat];
+  const elapsed = C.READY_SECONDS - tu.ready;
+  ctx.fillStyle = 'rgba(8,10,16,0.82)';
+  ctx.fillRect(0, 400, W, 250);
+  ctx.fillStyle = PCOL[tu.seat];
+  ctx.fillRect(0, 400, W, 6);
+  ctx.fillRect(0, 644, W, 6);
+  if (elapsed < 1) {
+    text(`Ready, ${p.name}`, W / 2, 500, 72, PCOL[tu.seat], 'center', 800);
+    const sub = p.foodShort > 0 ? `Short on tendies last round — only ${tu.length}s this turn` : `${tu.length}s on the clock`;
+    text(sub, W / 2, 575, 28, '#c8d2e3', 'center', 500);
+  } else {
+    const n = Math.ceil(tu.ready);
+    const frac = tu.ready - Math.floor(tu.ready); // 1 → 0 within this second
+    const pop = 1 + Math.max(0, frac - 0.75) * 2.4;
+    text(p.name, W / 2, 448, 30, PCOL[tu.seat], 'center', 800);
+    ctx.save();
+    ctx.translate(W / 2, 545);
+    ctx.scale(pop, pop);
+    text(String(n), 0, 0, 120, '#ffffff', 'center', 800);
+    ctx.restore();
+    text('get your thumbs ready', W / 2, 622, 22, '#9aa7bd', 'center', 500);
+    if (n !== lastReadyBeep) {
+      lastReadyBeep = n;
+      music.ding();
+    }
+  }
+}
+let lastReadyBeep = -1;
 
 function drawLobby() {
   drawBackground();
