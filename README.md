@@ -23,6 +23,10 @@ By default the game streams the M.U.L.E. main theme from the site that hosts it 
 
 After 12 rounds the richest ape wins, and the colony as a whole needs $60,000 to count as a success.
 
+## Characters
+
+Six to pick from, each with a trade-off shown on the character card: Ape, Autist, Degen, Smooth-Brain, Regard (nothing of theirs spoils, but starts poorer and pays more in shops) and Full-Regard (starts with $1,800, pays 30% more in shops, shorter turns). The art for all but Smooth-Brain is cut at load time from `assets/chars/sheet.jpg`; the flat grey background is removed in the browser, so a replacement sheet only needs the same six-cell layout.
+
 ## Your own images
 
 A tendies plot shows a fast-food sign instead of a robot. The signs are parodies drawn in code; to use pictures of your own, put PNG files in `assets/food/` named `1.png`, `2.png`, … (up to 8) and they are used instead. No such images are included in this repository.

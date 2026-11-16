@@ -115,11 +115,12 @@ function emptySeats() {
 }
 if (PARAMS.has('lobbydemo')) {
   // for screenshots: a lobby with people in it
+  const first = +(PARAMS.get('lobbydemo') || 0);
   lobby = [
-    { src: 'kbd', char: 0, ready: true },
-    { src: 'pad', pad: 0, char: 1, ready: false },
-    { src: 'pad', pad: 1, char: 2, ready: true },
-    { src: 'pad', pad: 2, char: 3, ready: false },
+    { src: 'kbd', char: (first + 0) % C.CHARACTERS.length, ready: true },
+    { src: 'pad', pad: 0, char: (first + 1) % C.CHARACTERS.length, ready: false },
+    { src: 'pad', pad: 1, char: (first + 2) % C.CHARACTERS.length, ready: true },
+    { src: 'pad', pad: 2, char: (first + 3) % C.CHARACTERS.length, ready: false },
   ];
 }
 let seats = [];
@@ -250,6 +251,80 @@ function drawBackground() {
     ctx.arc(x, y, r, 0, 7);
     ctx.fill();
   });
+}
+
+// Character art: cut from one sheet (assets/chars/sheet.jpg). Each cell is
+// given in the sheet's original 1792x2400 coordinates; the flat grey
+// background is flood-filled away from the edges and the sprite trimmed.
+const SPRITE_CELLS = {
+  ape: [60, 90, 880, 850],
+  regard: [1000, 90, 1780, 850],
+  fullregard: [160, 860, 820, 1600],
+  autist: [1000, 860, 1700, 1600],
+  degen: [120, 1620, 960, 2400],
+};
+const SPRITES = {};
+{
+  const sheet = new Image();
+  sheet.onload = () => {
+    const k = sheet.width / 1792;
+    for (const [id, cell] of Object.entries(SPRITE_CELLS)) {
+      const [x0, y0, x1, y1] = cell.map((v) => Math.round(v * k));
+      const w = x1 - x0;
+      const h = y1 - y0;
+      const cv = document.createElement('canvas');
+      cv.width = w;
+      cv.height = h;
+      const g = cv.getContext('2d');
+      g.drawImage(sheet, x0, y0, w, h, 0, 0, w, h);
+      const im = g.getImageData(0, 0, w, h);
+      const d = im.data;
+      // background colour: average of the four corners
+      let br = 0, bg = 0, bb = 0;
+      [[0, 0], [w - 1, 0], [0, h - 1], [w - 1, h - 1]].forEach(([cx, cy]) => {
+        const o = (cy * w + cx) * 4;
+        br += d[o] / 4;
+        bg += d[o + 1] / 4;
+        bb += d[o + 2] / 4;
+      });
+      const near = (o) => Math.abs(d[o] - br) + Math.abs(d[o + 1] - bg) + Math.abs(d[o + 2] - bb) < 72;
+      const seen = new Uint8Array(w * h);
+      const stack = [];
+      for (let x = 0; x < w; x++) stack.push(x, x + (h - 1) * w);
+      for (let y = 0; y < h; y++) stack.push(y * w, y * w + w - 1);
+      while (stack.length) {
+        const i = stack.pop();
+        if (seen[i]) continue;
+        seen[i] = 1;
+        if (!near(i * 4)) continue;
+        d[i * 4 + 3] = 0;
+        const x = i % w;
+        const y = (i - x) / w;
+        if (x > 0) stack.push(i - 1);
+        if (x < w - 1) stack.push(i + 1);
+        if (y > 0) stack.push(i - w);
+        if (y < h - 1) stack.push(i + w);
+      }
+      // soften the edge: half-transparent fringe where the fill stopped
+      let minX = w, minY = h, maxX = 0, maxY = 0;
+      for (let i = 0; i < w * h; i++) {
+        if (d[i * 4 + 3] === 0) continue;
+        const x = i % w;
+        const y = (i - x) / w;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+      g.putImageData(im, 0, 0);
+      const out = document.createElement('canvas');
+      out.width = maxX - minX + 1;
+      out.height = maxY - minY + 1;
+      out.getContext('2d').drawImage(cv, minX, minY, out.width, out.height, 0, 0, out.width, out.height);
+      SPRITES[id] = out;
+    }
+  };
+  sheet.src = 'assets/chars/sheet.jpg';
 }
 
 // Fast-food signs for tendies plots: knock-offs of the big chains, drawn
@@ -689,6 +764,31 @@ function drawCharacter(id, x, y, scale, color, facing = 1, now = 0, moving = fal
   const t = now / 95;
   const sw = moving ? Math.sin(t) : 0; // limb swing, -1..1
   const bob = moving ? Math.abs(Math.sin(t)) * 2 : 0;
+  const sprite = SPRITES[id];
+  if (sprite) {
+    // Cut-out art: feet on the origin, 78px tall at scale 1, standing on a
+    // ring in the player's colour. Walking is a bob and a little lean.
+    const H = 78;
+    const W = (H * sprite.width) / sprite.height;
+    ctx.fillStyle = color;
+    ctx.globalAlpha = 0.8;
+    ctx.beginPath();
+    ctx.ellipse(0, 3, W * 0.42 + 6, 8, 0, 0, 7);
+    ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.beginPath();
+    ctx.ellipse(0, 3, W * 0.42, 5, 0, 0, 7);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    if (moving) {
+      ctx.translate(0, -Math.abs(Math.sin(t)) * 3);
+      ctx.rotate(Math.sin(t) * 0.07);
+    }
+    ctx.drawImage(sprite, -W / 2, -H, W, H);
+    ctx.restore();
+    return;
+  }
+  if (id === 'regard' || id === 'fullregard') id = 'hedgie'; // until the sheet loads
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.beginPath();
   ctx.ellipse(0, 2, 28, 7, 0, 0, 7);

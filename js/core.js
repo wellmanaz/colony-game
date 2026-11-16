@@ -65,6 +65,16 @@ export const CHARACTERS = [
     pro: 'Starts with $1,400 · 20% longer turns',
     con: 'Eats 1 extra tendie · pays 15% more in shops',
   },
+  {
+    id: 'regard', name: 'Regard', money: 900, time: 1, swing: 1, noSpoil: true, shopMult: 1.1,
+    pro: 'Bagholds: tendies and fuel never spoil',
+    con: 'Starts with $900 · pays 10% more in shops',
+  },
+  {
+    id: 'fullregard', name: 'Full-Regard', money: 1800, time: 0.9, swing: 1, shopMult: 1.3,
+    pro: 'All in: starts with $1,800',
+    con: 'Pays 30% more in shops · 10% shorter turns',
+  },
 ];
 export const HEDGIE = { id: 'hedgie', name: 'Hedgie', money: 1000, time: 1, swing: 1 };
 
@@ -956,12 +966,14 @@ function startProduction(s) {
     p.goods.fuel -= fuelled;
     ledger.fuel.used = fuelled;
     // Spoilage: half of whatever you hold beyond next round's needs.
+    // (A Regard bagholds everything; nothing of theirs ever spoils.)
     const keepT = foodNeedFor(s, p, s.round + 1);
-    if (p.goods.tendies > keepT) {
+    const spoils = !characterOf(p).noSpoil;
+    if (spoils && p.goods.tendies > keepT) {
       ledger.tendies.spoiled = Math.floor((p.goods.tendies - keepT) / 2);
       p.goods.tendies -= ledger.tendies.spoiled;
     }
-    if (p.goods.fuel > burners.length) {
+    if (spoils && p.goods.fuel > burners.length) {
       ledger.fuel.spoiled = Math.floor((p.goods.fuel - burners.length) / 2);
       p.goods.fuel -= ledger.fuel.spoiled;
     }
