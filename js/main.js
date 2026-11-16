@@ -2118,8 +2118,8 @@ function drawAuction() {
   const o = C.OUTFITS[a.gi];
   const st = game.store;
   drawTopBar(`Trading floor ${a.gi + 1} of 4`);
-  text(`${o.name.toUpperCase()} AUCTION`, W / 2 + 40, 150, 64, o.color, 'center', 800);
-  drawGoodIcon(o.id, W / 2 - 40 - ctx.measureText(`${o.name.toUpperCase()} AUCTION`).width / 2, 150, 64);
+  text(`${o.name.toUpperCase()} AUCTION`, W / 2 + 40, 118, 64, o.color, 'center', 800);
+  drawGoodIcon(o.id, W / 2 - 40 - ctx.measureText(`${o.name.toUpperCase()} AUCTION`).width / 2, 118, 64);
 
   // What this good is actually for, so the bidding makes sense.
   const WHY = {
@@ -2129,15 +2129,15 @@ function drawAuction() {
     diamonds: 'DIAMONDS = MONEY. Pure profit; nobody needs them and the Exchange pays whatever the offworld market says.',
   };
   ctx.fillStyle = 'rgba(255,216,77,0.12)';
-  rr(160, 232, 1600, 40, 20);
+  rr(160, 194, 1600, 40, 20);
   ctx.fill();
-  text(WHY[a.good], W / 2, 252, 21, '#ffd84d', 'center', 700);
+  text(WHY[a.good], W / 2, 214, 21, '#ffd84d', 'center', 700);
   const sells = a.good !== 'diamonds' && st.stock[a.good] > 0;
   const stockText = a.good === 'diamonds' ? 'has buyers offworld' : `has ${st.stock[a.good]} in stock`;
   const sellText = sells ? `sells at ${money(st.sell[a.good])}` : 'has NOTHING to sell — no ceiling';
-  text(`The Exchange ${stockText} · ${sellText} · buys at ${money(st.buy[a.good])}`, W / 2, 205, 26, sells ? '#c8d2e3' : '#ffd84d', 'center', 500);
+  text(`The Exchange ${stockText} · ${sellText} · buys at ${money(st.buy[a.good])}`, W / 2, 166, 26, sells ? '#c8d2e3' : '#ffd84d', 'center', 500);
 
-  const top = 372;
+  const top = 380;
   const bottom = 850;
   const yOf = (price) => bottom - (price / a.axisMax) * (bottom - top);
   const colX = (i) => 480 + i * 320;
@@ -2152,7 +2152,7 @@ function drawAuction() {
       const x = colX(i);
       const role = a.roles[i];
       const y = role === 'buy' ? bottom - 130 : top + 80;
-      drawWalker(x, y, PCOL[i], p.kind === 'ai', 1, p.char, performance.now());
+      drawWalker(x, y, PCOL[i], p.kind === 'ai', 1, p.char, performance.now(), false, false, 1.5);
       text(p.name, x, y + 60, 24, '#f1f4f8', 'center');
       text((role === 'buy' ? 'BUYING' : 'SELLING') + (a.locked[i] ? ' ✓' : ''), x, y + 90, 26, role === 'buy' ? '#6be3a2' : '#ff8ad8', 'center', 800);
       text(`has ${p.goods[a.good]} · ${money(p.money)}`, x, y + 118, 20, '#9aa7bd', 'center', 500);
@@ -2215,12 +2215,13 @@ function drawAuction() {
     ctx.fillRect(x - 50, y - 3, 100, 6);
     drawTrader(p, i, x, y, buyer, a.active[i] ? vel[i] : 0, a.active[i], !!a.bounced[i], performance.now());
     // Sellers parked at the very top get their tag below the line instead.
-    const tagY = buyer ? y + 22 : y - 82;
+    // Sellers parked near the top get their tag below the line instead.
+    const tagY = buyer || a.price[i] > a.axisMax * 0.88 ? y + 22 : y - 128;
     text(money(a.price[i]), x, tagY, 22, '#fff', 'center', 800);
     const status = a.bounced[i] || (a.active[i] ? '' : 'stepped off');
     text(status ? `${p.name} · ${status}` : p.name, x, tagY + 24, 16, '#c8d2e3', 'center', 500);
     const n = buyer ? a.bought[i] : a.sold[i];
-    if (n) text(buyer ? `+${n}` : `−${n}`, x + 70, buyer ? y + 30 : y - 30, 24, buyer ? '#6be3a2' : '#ff8ad8', 'center', 800);
+    if (n) text(buyer ? `+${n}` : `−${n}`, x + 84, buyer ? y + 30 : y - 40, 24, buyer ? '#6be3a2' : '#ff8ad8', 'center', 800);
     ctx.globalAlpha = 1;
   });
 
@@ -2378,6 +2379,7 @@ function drawTrader(p, i, x, y, buyer, vel, active, bounced, now) {
   const hover = Math.sin(now / 260 + i) * 3;
   ctx.save();
   ctx.translate(x, y + (up || down ? 0 : hover));
+  ctx.scale(1.5, 1.5);
   if (bounced) {
     // back at the top (sold out) or the bottom (broke), standing quietly
     drawCharacter(p.char, 0, 0, 1, PCOL[i], 1, now, false);
